@@ -97,7 +97,7 @@ export async function completeOnboarding(
     insertAll(members);
   }
 
-  redirect("/dashboard");
+  redirect("/agents/budgeting");
 }
 
 export interface BudgetSettingsPayload {
@@ -151,7 +151,8 @@ export async function updateBudgetSettings(
       parseIsoDate(payload.semesterEnd, sem.end),
       user.id
     );
-  revalidatePath("/budget");
-  revalidatePath("/dashboard");
-  revalidatePath("/scenarios");
+  revalidatePath("/agents");
+  revalidatePath("/agents/budgeting");
+  revalidatePath("/agents/budgeting/budget");
+  revalidatePath("/agents/budgeting/scenarios");
 }

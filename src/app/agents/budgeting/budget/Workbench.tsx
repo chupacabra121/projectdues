@@ -122,18 +122,16 @@ export default function Workbench({
   const haircut = (activesSubtotal + pledgesSubtotal) * (1 - live.collection_rate);
 
   return (
-    <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
-      <div className="flex items-baseline justify-between mb-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Budget</h1>
+    <>
+      <div className="mb-6 flex items-baseline justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Changes save automatically and update the forecast as you type.
+        </p>
         <SaveIndicator state={saveState} />
       </div>
-      <p className="text-sm text-gray-500 mb-6">
-        Everything in one place — money in, money out, and what&apos;s left. Changes
-        save automatically and update the forecast as you type.
-      </p>
 
       {/* Summary strip */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+      <section className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard label="Total Income" value={fmtUSD(forecast.totalIncome)}
           sub={forecast.otherIncome > 0 ? `incl. ${fmtUSD(forecast.otherIncome)} other income` : "dues, expected pledge class"} />
         <SummaryCard label="Fixed Obligations" value={fmtUSD(forecast.fixedObligations)}
@@ -146,15 +144,15 @@ export default function Workbench({
       </section>
 
       {/* Scenario chips */}
-      <div className="flex flex-wrap items-center gap-2 mb-8 text-sm">
-        <span className="text-gray-500">End balance by pledge class:</span>
+      <div className="mb-8 flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-muted-foreground">End balance by pledge class:</span>
         {forecast.scenarios.map((sc) => (
           <span
             key={sc.label}
             className={`rounded-full px-3 py-1 font-medium ${
               sc.remainingBalance >= 0
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-red-50 text-red-700"
+                ? "bg-primary/10 text-accent-foreground"
+                : "bg-destructive/10 text-destructive"
             }`}
           >
             {sc.label} ({sc.pledgeCount}): {fmtUSD(sc.remainingBalance)}
@@ -163,28 +161,28 @@ export default function Workbench({
       </div>
 
       {/* Money In */}
-      <section id="money-in" className="bg-white rounded-2xl border border-gray-200 p-6 mb-6">
-        <div className="flex items-baseline justify-between mb-1">
-          <h2 className="font-semibold">Money In</h2>
-          <span className="text-lg font-semibold text-emerald-600">
+      <section id="money-in" className="mb-6 rounded-[1.5rem] border border-border bg-card p-6">
+        <div className="mb-1 flex items-baseline justify-between">
+          <h2 className="font-semibold text-foreground">Money In</h2>
+          <span className="text-lg font-semibold text-primary">
             {fmtUSD(forecast.totalIncome)}
           </span>
         </div>
-        <p className="text-sm text-gray-500 mb-5">
+        <p className="mb-5 text-sm text-muted-foreground">
           Membership, dues, and any other income for the semester
         </p>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Field label="Active Members" value={s.activeMembers} onChange={set("activeMembers")} />
           <Field label="Active Dues" value={s.activeDues} onChange={set("activeDues")} prefix="$" />
           <Field label="Pledge Dues" value={s.pledgeDues} onChange={set("pledgeDues")} prefix="$" />
           <Field label="Collection Rate" value={s.collectionRate} onChange={set("collectionRate")} suffix="%" max={100} />
         </div>
 
-        <p className="text-xs uppercase tracking-wide text-gray-400 font-medium mt-6 mb-3">
+        <p className="mb-3 mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           New Pledge Class — three scenarios
         </p>
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Conservative" value={s.conservative} onChange={set("conservative")}
             hint={`→ ${fmtUSD(revenueFor(live, int(s.conservative)))} revenue`} />
           <Field label="Expected" value={s.expected} onChange={set("expected")}
@@ -193,10 +191,10 @@ export default function Workbench({
             hint={`→ ${fmtUSD(revenueFor(live, int(s.optimistic)))} revenue`} />
         </div>
 
-        <p className="text-xs uppercase tracking-wide text-gray-400 font-medium mt-6 mb-3">
+        <p className="mb-3 mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Balances & targets
         </p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Field label="Starting Balance" value={s.startingBalance} onChange={set("startingBalance")} prefix="$" />
           <Field label="Dues Collected So Far" value={s.duesCollected} onChange={set("duesCollected")} prefix="$" />
           <Field label="Reserve Target" value={s.reserveTarget} onChange={set("reserveTarget")} prefix="$" />
@@ -205,31 +203,31 @@ export default function Workbench({
         </div>
 
         {/* Dues math, spelled out */}
-        <div className="mt-6 rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        <div className="mt-6 rounded-2xl bg-muted/60 px-4 py-3 text-sm leading-6 text-muted-foreground">
           {int(s.activeMembers)} actives × {fmtUSD(live.active_dues)} ={" "}
-          <span className="font-medium">{fmtUSD(activesSubtotal)}</span>
+          <span className="font-medium text-foreground">{fmtUSD(activesSubtotal)}</span>
           {" + "}
           {int(s.expected)} pledges × {fmtUSD(live.pledge_dues)} ={" "}
-          <span className="font-medium">{fmtUSD(pledgesSubtotal)}</span>
+          <span className="font-medium text-foreground">{fmtUSD(pledgesSubtotal)}</span>
           {" − "}
-          <span className="text-red-600">{fmtUSD(haircut)}</span> uncollected (
+          <span className="text-destructive">{fmtUSD(haircut)}</span> uncollected (
           {Math.round((1 - live.collection_rate) * 100)}%)
           {forecast.otherIncome > 0 && (
             <>
               {" + "}
-              <span className="text-emerald-700 font-medium">{fmtUSD(forecast.otherIncome)}</span>{" "}
+              <span className="font-medium text-primary">{fmtUSD(forecast.otherIncome)}</span>{" "}
               other income
             </>
           )}
           {" = "}
-          <span className="font-semibold text-gray-900">{fmtUSD(forecast.totalIncome)}</span>
+          <span className="font-semibold text-foreground">{fmtUSD(forecast.totalIncome)}</span>
         </div>
 
         <div className="mt-5">
-          <p className="text-xs uppercase tracking-wide text-gray-400 font-medium mb-3">
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Other Income — fundraisers, donations, allocations
           </p>
-          <div className="space-y-2 mb-3">
+          <div className="mb-3 space-y-2">
             {income.map((item) => (
               <ItemRow key={item.id} item={item} settings={live} />
             ))}
@@ -239,7 +237,7 @@ export default function Workbench({
       </section>
 
       {/* Money Out */}
-      <div className="grid lg:grid-cols-2 gap-6">
+      <div className="grid gap-6 lg:grid-cols-2">
         <ItemColumn
           title="Fixed Obligations"
           subtitle="Things we must pay"
@@ -256,10 +254,10 @@ export default function Workbench({
           items={events}
           settings={live}
           type="planned_event"
-          accent="text-indigo-600"
+          accent="text-foreground"
         />
       </div>
-    </main>
+    </>
   );
 }
 
@@ -269,7 +267,7 @@ function SaveIndicator({ state }: { state: "idle" | "dirty" | "saving" | "saved"
     state === "saved" ? "✓ Saved" : state === "saving" ? "Saving…" : "Unsaved changes";
   return (
     <span
-      className={`text-sm ${state === "saved" ? "text-emerald-600" : "text-gray-400"}`}
+      className={`whitespace-nowrap text-sm ${state === "saved" ? "text-primary" : "text-muted-foreground"}`}
     >
       {text}
     </span>
@@ -288,16 +286,20 @@ function SummaryCard({
   tone?: "good" | "bad";
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">{label}</p>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
-        className={`text-2xl font-semibold mt-1.5 ${
-          tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : ""
+        className={`mt-1.5 text-2xl font-semibold ${
+          tone === "good"
+            ? "text-primary"
+            : tone === "bad"
+              ? "text-destructive"
+              : "text-foreground"
         }`}
       >
         {value}
       </p>
-      <p className="text-xs text-gray-500 mt-1">{sub}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
 }
@@ -325,10 +327,10 @@ function Field({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="mb-1 block text-sm font-medium text-foreground/80">{label}</label>
       <div className="relative">
         {prefix && (
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
             {prefix}
           </span>
         )}
@@ -339,16 +341,16 @@ function Field({
           value={value}
           onChange={onChange}
           className={`${inputCls} ${prefix ? "pl-7" : ""} ${suffix ? "pr-8" : ""} ${
-            highlight ? "border-indigo-400 ring-1 ring-indigo-200" : ""
+            highlight ? "border-primary/50 ring-1 ring-primary/20" : ""
           }`}
         />
         {suffix && (
-          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+          <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
             {suffix}
           </span>
         )}
       </div>
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
 }
@@ -371,15 +373,15 @@ function ItemColumn({
   accent: string;
 }) {
   return (
-    <section className="bg-white rounded-2xl border border-gray-200 p-6">
-      <div className="flex items-baseline justify-between mb-1">
-        <h2 className="font-semibold">{title}</h2>
+    <section className="rounded-[1.5rem] border border-border bg-card p-6">
+      <div className="mb-1 flex items-baseline justify-between">
+        <h2 className="font-semibold text-foreground">{title}</h2>
         <span className={`text-lg font-semibold ${accent}`}>{fmtUSD(total)}</span>
       </div>
-      <p className="text-sm text-gray-500 mb-5">{subtitle}</p>
-      <div className="space-y-2 mb-4">
+      <p className="mb-5 text-sm text-muted-foreground">{subtitle}</p>
+      <div className="mb-4 space-y-2">
         {items.length === 0 && (
-          <p className="text-sm text-gray-400 py-3 text-center">Nothing here yet.</p>
+          <p className="py-3 text-center text-sm text-muted-foreground/70">Nothing here yet.</p>
         )}
         {items.map((item) => (
           <ItemRow key={item.id} item={item} settings={settings} />

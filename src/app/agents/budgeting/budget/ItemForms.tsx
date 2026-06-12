@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   addBudgetItem,
   deleteBudgetItem,
@@ -47,13 +48,7 @@ const TYPE_META: Record<
   },
 };
 
-function ItemFields({
-  type,
-  item,
-}: {
-  type: ItemType;
-  item?: BudgetItemRow;
-}) {
+function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
   const meta = TYPE_META[type];
   const isEvent = type === "planned_event";
   return (
@@ -73,7 +68,7 @@ function ItemFields({
         <div>
           <label className={labelCls}>{isEvent ? "Expected Cost" : "Amount"}</label>
           <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
               name="amount" type="number" min={0} step="0.01" required
               defaultValue={item?.amount}
@@ -140,7 +135,7 @@ export function AddItemForm({ type }: { type: ItemType }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="w-full rounded-xl border-2 border-dashed border-gray-300 py-3 text-sm font-medium text-gray-500 hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+        className="w-full rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
       >
         + Add {TYPE_META[type].noun}
       </button>
@@ -157,7 +152,7 @@ export function AddItemForm({ type }: { type: ItemType }) {
           setOpen(false);
         })
       }
-      className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3"
+      className="space-y-3 rounded-2xl border border-border bg-muted/40 p-4"
     >
       <input type="hidden" name="type" value={type} />
       <ItemFields type={type} />
@@ -165,14 +160,14 @@ export function AddItemForm({ type }: { type: ItemType }) {
         <button
           type="submit"
           disabled={isPending}
-          className="flex-1 rounded-lg bg-indigo-600 text-white py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+          className="flex-1 rounded-full bg-primary py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {isPending ? "Adding…" : "Add"}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+          className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted"
         >
           Cancel
         </button>
@@ -201,7 +196,7 @@ export function ItemRow({
             setEditing(false);
           })
         }
-        className="rounded-xl border border-indigo-200 bg-indigo-50/40 p-4 space-y-3"
+        className="space-y-3 rounded-2xl border border-primary/30 bg-accent/40 p-4"
       >
         <input type="hidden" name="type" value={item.type} />
         <input type="hidden" name="id" value={item.id} />
@@ -210,14 +205,14 @@ export function ItemRow({
           <button
             type="submit"
             disabled={isPending}
-            className="flex-1 rounded-lg bg-indigo-600 text-white py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            className="flex-1 rounded-full bg-primary py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {isPending ? "Saving…" : "Save"}
           </button>
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="rounded-lg border border-gray-300 px-4 py-2 text-sm text-gray-600 hover:bg-gray-100"
+            className="rounded-full border border-border px-4 py-2 text-sm text-muted-foreground hover:bg-muted"
           >
             Cancel
           </button>
@@ -232,19 +227,19 @@ export function ItemRow({
       : null;
 
   return (
-    <div className="group flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-4 py-3 hover:border-gray-200">
+    <div className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
       <button
         onClick={() => setEditing(true)}
-        className="min-w-0 flex-1 text-left cursor-pointer"
+        className="min-w-0 flex-1 cursor-pointer text-left"
         title="Click to edit"
       >
         <div className="flex items-center gap-2">
-          <p className="text-sm font-medium truncate">{item.name}</p>
-          <span className="text-xs rounded-full bg-gray-100 text-gray-500 px-2 py-0.5 shrink-0">
+          <p className="truncate text-sm font-medium text-foreground">{item.name}</p>
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             {item.category}
           </span>
         </div>
-        <p className="text-xs text-gray-500 mt-0.5">
+        <p className="mt-0.5 text-xs text-muted-foreground">
           {fmtDate(item.date)}
           {item.frequency === "monthly" && ` · monthly ×${n}`}
           {item.frequency === "yearly" && " · yearly"}
@@ -253,19 +248,21 @@ export function ItemRow({
           {item.notes ? ` · ${item.notes}` : ""}
         </p>
       </button>
-      <div className="flex items-center gap-3 shrink-0">
+      <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">
-          <p className="text-sm font-semibold">{fmtUSD(itemSemesterCost(item, settings))}</p>
-          {n > 1 && <p className="text-xs text-gray-400">{fmtUSD(item.amount)}/mo</p>}
+          <p className="text-sm font-semibold text-foreground">
+            {fmtUSD(itemSemesterCost(item, settings))}
+          </p>
+          {n > 1 && (
+            <p className="text-xs text-muted-foreground">{fmtUSD(item.amount)}/mo</p>
+          )}
         </div>
         <button
           onClick={() => setEditing(true)}
-          className="text-gray-300 hover:text-indigo-600 transition-colors opacity-0 group-hover:opacity-100"
+          className="text-muted-foreground/40 opacity-0 transition-all hover:text-primary group-hover:opacity-100"
           title="Edit"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-          </svg>
+          <Pencil className="h-4 w-4" />
         </button>
         <DeleteButton id={item.id} />
       </div>
@@ -283,12 +280,10 @@ export function DeleteButton({ id }: { id: number }) {
         fd.set("id", String(id));
         startTransition(() => deleteBudgetItem(fd));
       }}
-      className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+      className="text-muted-foreground/40 transition-colors hover:text-destructive disabled:opacity-50"
       title="Delete"
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-      </svg>
+      <Trash2 className="h-4 w-4" />
     </button>
   );
 }

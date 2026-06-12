@@ -53,7 +53,7 @@ export async function login(
 
   await createSession(user.id);
   const settings = getSettings(user.id);
-  redirect(settings?.onboarded ? "/dashboard" : "/onboarding");
+  redirect(settings?.onboarded ? "/agents" : "/onboarding");
 }
 
 export async function logout(): Promise<void> {

@@ -91,8 +91,8 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
     <main className="flex-1 px-4 py-10">
       <div className="max-w-xl mx-auto">
         <Logo className="justify-center mb-6" />
-        <p className="text-center text-sm text-gray-500 mb-8">
-          Setting up <span className="font-medium text-gray-700">{chapterName}</span>
+        <p className="text-center text-sm text-muted-foreground mb-8">
+          Setting up <span className="font-medium text-foreground/80">{chapterName}</span>
         </p>
 
         {/* Step indicator */}
@@ -102,54 +102,54 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               <div
                 className={`h-7 w-7 rounded-full grid place-items-center text-xs font-semibold ${
                   i < stepIndex
-                    ? "bg-indigo-600 text-white"
+                    ? "bg-primary text-primary-foreground"
                     : i === stepIndex
-                      ? "bg-indigo-100 text-indigo-700 ring-2 ring-indigo-600"
-                      : "bg-gray-200 text-gray-500"
+                      ? "bg-accent text-accent-foreground ring-2 ring-primary"
+                      : "bg-muted text-muted-foreground"
                 }`}
               >
                 {i + 1}
               </div>
               <span
-                className={`text-sm ${i === stepIndex ? "font-medium text-gray-900" : "text-gray-400"}`}
+                className={`text-sm ${i === stepIndex ? "font-medium text-foreground" : "text-muted-foreground/70"}`}
               >
                 {s.label}
               </span>
               {i < STEP_LABELS.length - 1 && (
-                <div className="w-8 h-px bg-gray-300 mx-1" />
+                <div className="w-8 h-px bg-border mx-1" />
               )}
             </div>
           ))}
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
+        <div className="bg-card rounded-3xl border border-border shadow-sm p-8">
           {step === "import" && (
             <div>
               <h1 className="text-xl font-semibold mb-1">Bring in your roster</h1>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 Import your member list, or start fresh — you can always add data later.
               </p>
               <div className="space-y-3">
                 <button
                   disabled
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left opacity-60 cursor-not-allowed"
+                  className="w-full rounded-xl border border-border px-4 py-3.5 text-left opacity-60 cursor-not-allowed"
                 >
                   <span className="font-medium text-sm">Import from Billhighway</span>
-                  <span className="ml-2 text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Coming soon</span>
+                  <span className="ml-2 text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">Coming soon</span>
                 </button>
                 <button
                   disabled
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left opacity-60 cursor-not-allowed"
+                  className="w-full rounded-xl border border-border px-4 py-3.5 text-left opacity-60 cursor-not-allowed"
                 >
                   <span className="font-medium text-sm">Import from OmegaFi</span>
-                  <span className="ml-2 text-xs bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">Coming soon</span>
+                  <span className="ml-2 text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5">Coming soon</span>
                 </button>
                 <button
                   onClick={() => fileInput.current?.click()}
-                  className="w-full rounded-xl border border-indigo-200 bg-indigo-50/50 px-4 py-3.5 text-left hover:border-indigo-400 hover:bg-indigo-50 transition-colors"
+                  className="w-full rounded-xl border border-primary/30 bg-accent/50 px-4 py-3.5 text-left hover:border-primary/60 hover:bg-accent transition-colors"
                 >
-                  <span className="font-medium text-sm text-indigo-900">Upload Spreadsheet</span>
-                  <p className="text-xs text-gray-500 mt-0.5">CSV or XLSX roster export</p>
+                  <span className="font-medium text-sm text-accent-foreground">Upload Spreadsheet</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">CSV or XLSX roster export</p>
                 </button>
                 <input
                   ref={fileInput}
@@ -164,14 +164,14 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                 />
                 <button
                   onClick={() => setStep("membership")}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3.5 text-left hover:border-gray-400 transition-colors"
+                  className="w-full rounded-xl border border-border px-4 py-3.5 text-left hover:border-foreground/40 transition-colors"
                 >
                   <span className="font-medium text-sm">Start From Scratch</span>
-                  <p className="text-xs text-gray-500 mt-0.5">Just enter a few numbers — no names needed</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Just enter a few numbers — no names needed</p>
                 </button>
               </div>
               {importError && (
-                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-4">{importError}</p>
+                <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2 mt-4">{importError}</p>
               )}
             </div>
           )}
@@ -179,23 +179,23 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
           {step === "confirm" && importResult && (
             <div>
               <h1 className="text-xl font-semibold mb-1">Here&apos;s what we found</h1>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 {importResult.statusColumn
                   ? `Detected member status from the “${importResult.statusColumn}” column.`
                   : "We couldn't find a status column, so we counted every row as an active member. You can adjust the numbers next."}
               </p>
               <div className="space-y-3 mb-4">
-                <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3.5">
-                  <span className="text-sm font-medium text-emerald-900">Active Members</span>
-                  <span className="text-lg font-semibold text-emerald-700">{importResult.activeCount}</span>
+                <div className="flex items-center justify-between rounded-xl bg-primary/10 border border-primary/20 px-4 py-3.5">
+                  <span className="text-sm font-medium text-accent-foreground">Active Members</span>
+                  <span className="text-lg font-semibold text-primary">{importResult.activeCount}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-xl bg-sky-50 border border-sky-200 px-4 py-3.5">
-                  <span className="text-sm font-medium text-sky-900">Pledges</span>
-                  <span className="text-lg font-semibold text-sky-700">{importResult.pledgeCount}</span>
+                <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3.5">
+                  <span className="text-sm font-medium text-foreground">Pledges</span>
+                  <span className="text-lg font-semibold text-foreground">{importResult.pledgeCount}</span>
                 </div>
               </div>
               {importResult.members.length > 0 && (
-                <p className="text-xs text-gray-500 mb-6">
+                <p className="text-xs text-muted-foreground mb-6">
                   We&apos;ll save all {importResult.members.length} members to your
                   roster — {importResult.emailCount} with emails and{" "}
                   {importResult.phoneCount} with phone numbers, ready for dues
@@ -209,7 +209,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               </button>
               <button
                 onClick={() => setStep("import")}
-                className="w-full text-sm text-gray-500 hover:text-gray-700 mt-3"
+                className="w-full text-sm text-muted-foreground hover:text-foreground/80 mt-3"
               >
                 Try a different file
               </button>
@@ -219,7 +219,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
           {step === "membership" && (
             <div>
               <h1 className="text-xl font-semibold mb-1">Who&apos;s in the chapter?</h1>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 Rough numbers are fine — no names required.
               </p>
               <div className="space-y-4">
@@ -258,7 +258,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
           {step === "dues" && (
             <div>
               <h1 className="text-xl font-semibold mb-1">Dues & collections</h1>
-              <p className="text-sm text-gray-500 mb-6">
+              <p className="text-sm text-muted-foreground mb-6">
                 Per-member dues for this semester. We&apos;ll forecast revenue as you type.
               </p>
               <div className="space-y-4">
@@ -266,7 +266,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                   <div>
                     <label className={labelCls}>Active Member Dues</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-sm">$</span>
                       <input
                         type="number" min={0} className={`${inputCls} pl-7`} placeholder="650"
                         value={activeDues} onChange={(e) => setActiveDues(e.target.value)}
@@ -276,7 +276,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                   <div>
                     <label className={labelCls}>Pledge Dues</label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-sm">$</span>
                       <input
                         type="number" min={0} className={`${inputCls} pl-7`} placeholder="800"
                         value={pledgeDues} onChange={(e) => setPledgeDues(e.target.value)}
@@ -290,16 +290,16 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                     type="number" min={0} max={100} className={inputCls}
                     value={collectionRate} onChange={(e) => setCollectionRate(e.target.value)}
                   />
-                  <p className="text-xs text-gray-400 mt-1">
+                  <p className="text-xs text-muted-foreground/70 mt-1">
                     Most chapters collect 90–97% of billed dues.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 rounded-xl bg-indigo-600 text-white px-5 py-4">
-                <p className="text-xs uppercase tracking-wide text-indigo-200">Projected Revenue</p>
+              <div className="mt-6 rounded-xl bg-primary text-primary-foreground px-5 py-4">
+                <p className="text-xs uppercase tracking-wide text-background/60">Projected Revenue</p>
                 <p className="text-3xl font-semibold mt-1">{fmtUSD(projectedRevenue)}</p>
-                <p className="text-xs text-indigo-200 mt-2">
+                <p className="text-xs text-background/60 mt-2">
                   ({nActives} actives × {fmtUSD(dActive)} + {nExpected} new pledges × {fmtUSD(dPledge)}) × {Math.round(rate * 100)}%
                 </p>
               </div>
@@ -313,7 +313,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               </button>
               <button
                 onClick={() => setStep("membership")}
-                className="w-full text-sm text-gray-500 hover:text-gray-700 mt-3"
+                className="w-full text-sm text-muted-foreground hover:text-foreground/80 mt-3"
               >
                 Back
               </button>

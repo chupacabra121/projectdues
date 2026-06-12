@@ -1,10 +1,9 @@
 export function Logo({ className = "" }: { className?: string }) {
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <div className="h-8 w-8 rounded-lg bg-indigo-600 text-white grid place-items-center font-bold text-sm">
-        C
-      </div>
-      <span className="text-lg font-semibold tracking-tight">ChapterOS</span>
+    <div className={`flex items-center justify-center ${className}`}>
+      <span className="font-display text-3xl tracking-tight text-foreground">
+        Chapter<span className="text-primary">OS</span>
+      </span>
     </div>
   );
 }
@@ -21,10 +20,10 @@ export function AuthShell({
   return (
     <main className="flex-1 grid place-items-center px-4 py-12">
       <div className="w-full max-w-md">
-        <Logo className="justify-center mb-8" />
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-8">
-          <h1 className="text-xl font-semibold">{title}</h1>
-          <p className="text-sm text-gray-500 mt-1 mb-6">{subtitle}</p>
+        <Logo className="mb-8" />
+        <div className="bg-card rounded-3xl border border-border shadow-sm p-8">
+          <h1 className="text-xl font-semibold text-foreground">{title}</h1>
+          <p className="text-sm text-muted-foreground mt-1 mb-6">{subtitle}</p>
           {children}
         </div>
       </div>
@@ -33,7 +32,7 @@ export function AuthShell({
 }
 
 export const inputCls =
-  "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500";
-export const labelCls = "block text-sm font-medium text-gray-700 mb-1";
+  "w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-ring";
+export const labelCls = "block text-sm font-medium text-foreground/80 mb-1";
 export const primaryBtnCls =
-  "w-full rounded-lg bg-indigo-600 text-white py-2.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors";
+  "w-full rounded-full bg-primary text-primary-foreground py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity";

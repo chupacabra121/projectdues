@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
+import { BellRing, Trash2 } from "lucide-react";
 import {
   addMember,
   updateMember,
@@ -20,6 +21,8 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: "pledge", label: "Pledges" },
   { key: "unpaid", label: "Unpaid" },
 ];
+
+const ROW_GRID = "sm:grid-cols-[1.4fr_1.6fr_1.1fr_5.5rem_7rem_6.5rem]";
 
 export default function Roster({
   members,
@@ -89,20 +92,19 @@ export default function Roster({
   }
 
   return (
-    <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8">
-      <div className="flex items-baseline justify-between mb-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Members</h1>
-        <p className="text-sm text-gray-500">
+    <>
+      <div className="mb-6 flex items-baseline justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Member information with contact details and dues status — the
+          foundation for mass email and text reminders.
+        </p>
+        <p className="whitespace-nowrap text-sm text-muted-foreground">
           {actives} actives · {pledges} pledges
         </p>
       </div>
-      <p className="text-sm text-gray-500 mb-6">
-        Your roster with contact info and dues status — the foundation for mass
-        email and text reminders.
-      </p>
 
       {/* Summary */}
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard label="Dues Billed" value={fmtUSD(totalBilled)}
           sub={`${members.length} members`} />
         <SummaryCard label="Collected" value={fmtUSD(totalCollected)}
@@ -125,16 +127,16 @@ export default function Roster({
       )}
 
       {/* Toolbar */}
-      <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="flex rounded-lg border border-gray-200 bg-white p-0.5">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <div className="flex rounded-full border border-border bg-card p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === f.key
-                  ? "bg-indigo-600 text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                  ? "bg-foreground text-background"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               {f.label}
@@ -142,36 +144,37 @@ export default function Roster({
           ))}
         </div>
         <div className="flex-1" />
-        {copied && <span className="text-sm text-emerald-600">{copied}</span>}
+        {copied && <span className="text-sm text-primary">{copied}</span>}
         <button
           onClick={() => copy("emails")}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
           Copy emails
         </button>
         <button
           onClick={() => copy("phones")}
-          className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
           Copy phones
         </button>
         <button
           disabled
-          title="Mass email and SMS dues reminders are coming soon"
-          className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm font-medium text-gray-400 cursor-not-allowed"
+          title="The Dues Collection Agent will send mass email and SMS reminders — coming soon"
+          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-border bg-muted px-3.5 py-1.5 text-sm font-medium text-muted-foreground"
         >
+          <BellRing className="h-3.5 w-3.5" />
           Send reminders · Soon
         </button>
       </div>
-      <p className="text-xs text-gray-400 mb-4">
+      <p className="mb-4 text-xs text-muted-foreground/80">
         Copy buttons follow the current filter — e.g. filter to{" "}
         <span className="font-medium">Unpaid</span>, then copy emails to paste
         into a dues-reminder message.
       </p>
 
       {/* Roster table */}
-      <section className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
-        <div className="hidden sm:grid grid-cols-[1.4fr_1.6fr_1.1fr_5.5rem_7rem_6.5rem] gap-3 px-5 py-2.5 border-b border-gray-100 text-xs uppercase tracking-wide text-gray-400 font-medium">
+      <section className="overflow-hidden rounded-[1.5rem] border border-border bg-card">
+        <div className={`hidden gap-3 border-b border-border/60 px-5 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid ${ROW_GRID}`}>
           <span>Name</span>
           <span>Email</span>
           <span>Phone</span>
@@ -180,20 +183,20 @@ export default function Roster({
           <span />
         </div>
         {filtered.length === 0 && (
-          <p className="text-sm text-gray-400 text-center py-8">
+          <p className="py-8 text-center text-sm text-muted-foreground/70">
             {members.length === 0
-              ? "No members yet — add them below, or re-import a roster from a fresh account."
+              ? "No members yet — add them below."
               : "No members match this filter."}
           </p>
         )}
-        <div className="divide-y divide-gray-50">
+        <div className="divide-y divide-border/40">
           {filtered.map((m) => (
             <MemberLine key={m.id} member={m} dues={duesFor(m)} />
           ))}
         </div>
         <AddMemberLine />
       </section>
-    </main>
+    </>
   );
 }
 
@@ -209,16 +212,20 @@ function SummaryCard({
   tone?: "good" | "bad";
 }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-200 p-5">
-      <p className="text-xs uppercase tracking-wide text-gray-400 font-medium">{label}</p>
+    <div className="rounded-2xl border border-border bg-card p-5">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
-        className={`text-2xl font-semibold mt-1.5 ${
-          tone === "good" ? "text-emerald-600" : tone === "bad" ? "text-red-600" : ""
+        className={`mt-1.5 text-2xl font-semibold ${
+          tone === "good"
+            ? "text-primary"
+            : tone === "bad"
+              ? "text-destructive"
+              : "text-foreground"
         }`}
       >
         {value}
       </p>
-      <p className="text-xs text-gray-500 mt-1">{sub}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
 }
@@ -236,8 +243,8 @@ function SyncBanner({
 }) {
   const [isPending, startTransition] = useTransition();
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-6">
-      <p className="text-sm text-amber-900 flex-1 min-w-60">
+    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
+      <p className="min-w-60 flex-1 text-sm leading-6 text-foreground/80">
         Your roster ({actives} actives, {pledges} pledges, {fmtUSD(collected)}{" "}
         collected) doesn&apos;t match the budget ({settings.active_members} actives,{" "}
         {settings.current_pledges} pledges, {fmtUSD(settings.dues_collected)}{" "}
@@ -246,7 +253,7 @@ function SyncBanner({
       <button
         disabled={isPending}
         onClick={() => startTransition(() => syncRosterToBudget())}
-        className="rounded-lg bg-amber-600 text-white px-4 py-2 text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+        className="rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {isPending ? "Syncing…" : "Use roster numbers in budget"}
       </button>
@@ -269,7 +276,7 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
             setEditing(false);
           })
         }
-        className="grid sm:grid-cols-[1.4fr_1.6fr_1.1fr_5.5rem_7rem_6.5rem] gap-2 px-5 py-3 bg-indigo-50/40 items-center"
+        className={`grid items-center gap-2 bg-accent/30 px-5 py-3 ${ROW_GRID}`}
       >
         <input type="hidden" name="id" value={member.id} />
         <input name="name" defaultValue={member.name} required className={inputCls} />
@@ -280,7 +287,7 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
           <option value="pledge">Pledge</option>
         </select>
         <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
           <input
             name="amount_paid" type="number" min={0} step="0.01"
             defaultValue={member.amount_paid}
@@ -288,18 +295,18 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
             className={`${inputCls} pl-6`}
           />
         </div>
-        <div className="flex gap-1.5 justify-end">
+        <div className="flex justify-end gap-1.5">
           <button
             type="submit"
             disabled={isPending}
-            className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+            className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {isPending ? "…" : "Save"}
           </button>
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="rounded-lg border border-gray-300 px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100"
+            className="rounded-full border border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted"
           >
             ✕
           </button>
@@ -309,41 +316,48 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
   }
 
   return (
-    <div className="group grid sm:grid-cols-[1.4fr_1.6fr_1.1fr_5.5rem_7rem_6.5rem] gap-3 px-5 py-3 items-center hover:bg-gray-50/60">
-      <button onClick={() => setEditing(true)} className="text-left text-sm font-medium truncate cursor-pointer" title="Click to edit">
+    <div className={`group grid items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40 ${ROW_GRID}`}>
+      <button
+        onClick={() => setEditing(true)}
+        className="cursor-pointer truncate text-left text-sm font-medium text-foreground"
+        title="Click to edit"
+      >
         {member.name}
       </button>
-      <span className="text-sm text-gray-600 truncate">
+      <span className="truncate text-sm text-muted-foreground">
         {member.email ? (
-          <a href={`mailto:${member.email}`} className="hover:text-indigo-600 hover:underline">
+          <a href={`mailto:${member.email}`} className="transition-colors hover:text-primary hover:underline">
             {member.email}
           </a>
         ) : (
-          <span className="text-gray-300">—</span>
+          <span className="text-muted-foreground/40">—</span>
         )}
       </span>
-      <span className="text-sm text-gray-600 truncate">
-        {member.phone || <span className="text-gray-300">—</span>}
+      <span className="truncate text-sm text-muted-foreground">
+        {member.phone || <span className="text-muted-foreground/40">—</span>}
       </span>
       <span
-        className={`text-xs font-medium rounded-full px-2 py-1 text-center w-fit ${
+        className={`w-fit rounded-full px-2 py-1 text-center text-xs font-medium ${
           member.status === "active"
-            ? "bg-emerald-50 text-emerald-700"
-            : "bg-sky-50 text-sky-700"
+            ? "bg-primary/10 text-accent-foreground"
+            : "bg-secondary text-secondary-foreground"
         }`}
       >
         {member.status === "active" ? "Active" : "Pledge"}
       </span>
-      <span className="text-sm text-right">
+      <span className="text-right text-sm">
         {paidUp ? (
-          <span className="text-emerald-600 font-medium">Paid ✓</span>
+          <span className="font-medium text-primary">Paid ✓</span>
         ) : (
-          <span className="text-red-600 font-medium" title={`${fmtUSD(member.amount_paid)} of ${fmtUSD(dues)} paid`}>
+          <span
+            className="font-medium text-destructive"
+            title={`${fmtUSD(member.amount_paid)} of ${fmtUSD(dues)} paid`}
+          >
             owes {fmtUSD(balance)}
           </span>
         )}
       </span>
-      <div className="flex gap-2 justify-end items-center">
+      <div className="flex items-center justify-end gap-2">
         {!paidUp && (
           <button
             disabled={isPending}
@@ -353,7 +367,7 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
               fd.set("amount", String(dues));
               startTransition(() => markMemberPaid(fd));
             }}
-            className="text-xs rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 px-2 py-1 font-medium hover:bg-emerald-100 disabled:opacity-50 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-medium text-accent-foreground opacity-0 transition-opacity hover:bg-primary/20 disabled:opacity-50 group-hover:opacity-100"
             title="Mark full dues as paid"
           >
             Mark paid
@@ -366,12 +380,10 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
             fd.set("id", String(member.id));
             startTransition(() => deleteMember(fd));
           }}
-          className="text-gray-300 hover:text-red-500 transition-colors disabled:opacity-50"
+          className="text-muted-foreground/40 transition-colors hover:text-destructive disabled:opacity-50"
           title="Delete member"
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
-          </svg>
+          <Trash2 className="h-4 w-4" />
         </button>
       </div>
     </div>
@@ -391,7 +403,7 @@ function AddMemberLine() {
           formRef.current?.querySelector<HTMLInputElement>("input[name='name']")?.focus();
         })
       }
-      className="grid sm:grid-cols-[1.4fr_1.6fr_1.1fr_5.5rem_7rem_6.5rem] gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50/60 items-center"
+      className={`grid items-center gap-2 border-t border-border/60 bg-muted/40 px-5 py-3 ${ROW_GRID}`}
     >
       <input name="name" required placeholder="Add member — name" className={inputCls} />
       <input name="email" type="email" placeholder="email (optional)" className={inputCls} />
@@ -404,7 +416,7 @@ function AddMemberLine() {
       <button
         type="submit"
         disabled={isPending}
-        className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+        className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {isPending ? "Adding…" : "Add"}
       </button>

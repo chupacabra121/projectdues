@@ -4,7 +4,13 @@ import { revalidatePath } from "next/cache";
 import { getDb, getMembers } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-const PATHS = ["/members", "/budget", "/dashboard", "/scenarios"];
+const PATHS = [
+  "/agents",
+  "/agents/budgeting",
+  "/agents/budgeting/budget",
+  "/agents/budgeting/members",
+  "/agents/budgeting/scenarios",
+];
 
 function revalidateAll() {
   for (const p of PATHS) revalidatePath(p);

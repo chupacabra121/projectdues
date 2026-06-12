@@ -8,8 +8,21 @@ treasurers:
 
 > "Can my chapter afford what we're planning this semester?"
 
+## How it's organized
+
+The app is built around **agents**, not tabs. The home screen is an agents hub
+showing your operating team; the **Budgeting Agent** is live today with four
+subtabs — Overview, Budget, Members, and Scenarios — and the hub stakes out
+what's next: a Dues Collection Agent (mass email/SMS reminders), a Recruitment
+Agent, and an Events Agent. The visual language (warm near-white surfaces, one
+emerald accent, serif display headings, pill navigation) is inspired by
+finia.ro.
+
 ## What's in V1
 
+- **Agents hub** — impact tiles, a "next action" card computed from your live
+  forecast (deficit → review budget; unpaid dues → open the roster), and the
+  agent roster with active/coming-soon status.
 - **Onboarding wizard** — import a roster (CSV/XLSX with automatic detection
   of status, name, email, and phone columns; alumni/inactive rows are
   skipped) or start from scratch with just headcounts, then set dues and an

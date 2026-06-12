@@ -27,15 +27,15 @@ export default function SignupPage() {
           <input id="password" name="password" type="password" required minLength={8} className={inputCls} placeholder="At least 8 characters" />
         </div>
         {state.error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{state.error}</p>
+          <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{state.error}</p>
         )}
         <button type="submit" disabled={pending} className={primaryBtnCls}>
           {pending ? "Creating account…" : "Create account"}
         </button>
       </form>
-      <p className="text-sm text-gray-500 mt-6 text-center">
+      <p className="text-sm text-muted-foreground mt-6 text-center">
         Already have an account?{" "}
-        <Link href="/login" className="text-indigo-600 font-medium hover:underline">
+        <Link href="/login" className="text-primary font-medium hover:underline">
           Sign in
         </Link>
       </p>

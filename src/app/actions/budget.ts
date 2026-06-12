@@ -9,7 +9,12 @@ import {
   categorizeIncome,
 } from "@/lib/categorize";
 
-const PATHS = ["/budget", "/dashboard", "/scenarios"];
+const PATHS = [
+  "/agents",
+  "/agents/budgeting",
+  "/agents/budgeting/budget",
+  "/agents/budgeting/scenarios",
+];
 const ITEM_TYPES = ["fixed_expense", "planned_event", "other_income"] as const;
 type ItemType = (typeof ITEM_TYPES)[number];
 
