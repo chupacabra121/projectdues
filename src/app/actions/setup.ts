@@ -16,6 +16,13 @@ export interface OnboardingPayload {
   collectionRate: number; // percent, 0-100
 }
 
+export interface OnboardingMember {
+  name: string;
+  email: string;
+  phone: string;
+  status: "active" | "pledge";
+}
+
 function clampInt(n: unknown, min = 0, max = 100000): number {
   const v = Math.round(Number(n));
   if (isNaN(v)) return min;
@@ -28,7 +35,10 @@ function clampMoney(n: unknown): number {
   return Math.min(10_000_000, Math.max(0, v));
 }
 
-export async function completeOnboarding(payload: OnboardingPayload): Promise<void> {
+export async function completeOnboarding(
+  payload: OnboardingPayload,
+  members: OnboardingMember[] = []
+): Promise<void> {
   const user = await requireUser();
   const sem = defaultSemester();
   const rate = Math.min(100, Math.max(0, Number(payload.collectionRate) || 0)) / 100;
@@ -64,6 +74,28 @@ export async function completeOnboarding(payload: OnboardingPayload): Promise<vo
       sem.start,
       sem.end
     );
+
+  if (members.length > 0) {
+    const db = getDb();
+    const insert = db.prepare(
+      "INSERT INTO members (user_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?)"
+    );
+    const insertAll = db.transaction((rows: OnboardingMember[]) => {
+      db.prepare("DELETE FROM members WHERE user_id = ?").run(user.id);
+      for (const m of rows.slice(0, 2000)) {
+        const name = String(m.name ?? "").trim().slice(0, 120);
+        if (!name) continue;
+        insert.run(
+          user.id,
+          name,
+          String(m.email ?? "").trim().slice(0, 120),
+          String(m.phone ?? "").trim().slice(0, 40),
+          m.status === "pledge" ? "pledge" : "active"
+        );
+      }
+    });
+    insertAll(members);
+  }
 
   redirect("/dashboard");
 }

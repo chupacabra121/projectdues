@@ -10,8 +10,9 @@ treasurers:
 
 ## What's in V1
 
-- **Onboarding wizard** — import a roster (CSV/XLSX with automatic member/pledge
-  detection) or start from scratch with just headcounts, then set dues and an
+- **Onboarding wizard** — import a roster (CSV/XLSX with automatic detection
+  of status, name, email, and phone columns; alumni/inactive rows are
+  skipped) or start from scratch with just headcounts, then set dues and an
   expected collection rate. Revenue is forecast live as you type.
 - **Budget workbench** — everything on one tab. A *Money In* panel holds
   membership, dues, collection rate, all three pledge-class scenarios,
@@ -22,6 +23,12 @@ treasurers:
   do) sit below, with inline click-to-edit on every item. Items are
   auto-categorized with manual override; obligations support one-time,
   monthly, and yearly frequencies.
+- **Members roster** — every member with email, phone, status, and dues
+  balance. Inline editing, one-click "mark paid", filters (all / actives /
+  pledges / unpaid), and filter-aware copy-emails / copy-phones buttons — the
+  foundation for mass email and SMS dues reminders (coming later). Roster
+  imports bring contact info in automatically, and a one-click sync pushes
+  roster headcounts and collected dues into the budget.
 - **Forecasting** — projected revenue, total obligations, total planned events,
   and projected end-of-semester balance, recomputed on every change.
 - **Scenario planning** — conservative / expected / optimistic pledge-class

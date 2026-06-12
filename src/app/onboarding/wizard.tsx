@@ -71,16 +71,19 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
 
   function finish() {
     startTransition(async () => {
-      await completeOnboarding({
-        activeMembers: nActives,
-        currentPledges: Math.max(0, parseInt(currentPledges) || 0),
-        pledgesConservative: Math.max(0, Math.round(nExpected * 0.67)),
-        pledgesExpected: nExpected,
-        pledgesOptimistic: Math.round(nExpected * 1.4),
-        activeDues: dActive,
-        pledgeDues: dPledge,
-        collectionRate: rate * 100,
-      });
+      await completeOnboarding(
+        {
+          activeMembers: nActives,
+          currentPledges: Math.max(0, parseInt(currentPledges) || 0),
+          pledgesConservative: Math.max(0, Math.round(nExpected * 0.67)),
+          pledgesExpected: nExpected,
+          pledgesOptimistic: Math.round(nExpected * 1.4),
+          activeDues: dActive,
+          pledgeDues: dPledge,
+          collectionRate: rate * 100,
+        },
+        importResult?.members ?? []
+      );
     });
   }
 
@@ -181,7 +184,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                   ? `Detected member status from the “${importResult.statusColumn}” column.`
                   : "We couldn't find a status column, so we counted every row as an active member. You can adjust the numbers next."}
               </p>
-              <div className="space-y-3 mb-6">
+              <div className="space-y-3 mb-4">
                 <div className="flex items-center justify-between rounded-xl bg-emerald-50 border border-emerald-200 px-4 py-3.5">
                   <span className="text-sm font-medium text-emerald-900">Active Members</span>
                   <span className="text-lg font-semibold text-emerald-700">{importResult.activeCount}</span>
@@ -191,6 +194,16 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                   <span className="text-lg font-semibold text-sky-700">{importResult.pledgeCount}</span>
                 </div>
               </div>
+              {importResult.members.length > 0 && (
+                <p className="text-xs text-gray-500 mb-6">
+                  We&apos;ll save all {importResult.members.length} members to your
+                  roster — {importResult.emailCount} with emails and{" "}
+                  {importResult.phoneCount} with phone numbers, ready for dues
+                  reminders later.
+                  {importResult.totalRows > importResult.members.length &&
+                    ` ${importResult.totalRows - importResult.members.length} rows with other statuses (alumni, inactive, …) were skipped.`}
+                </p>
+              )}
               <button onClick={confirmImport} className={primaryBtnCls}>
                 Confirm
               </button>

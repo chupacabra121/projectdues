@@ -53,6 +53,18 @@ function createDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_budget_items_user ON budget_items(user_id);
+
+    CREATE TABLE IF NOT EXISTS members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge')),
+      amount_paid REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
   `);
   migrateBudgetItemTypes(db);
   return db;
@@ -146,6 +158,24 @@ export function getSettings(userId: number): SettingsRow | undefined {
   return getDb()
     .prepare("SELECT * FROM settings WHERE user_id = ?")
     .get(userId) as SettingsRow | undefined;
+}
+
+export interface MemberRow {
+  id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  phone: string;
+  status: "active" | "pledge";
+  amount_paid: number;
+}
+
+export function getMembers(userId: number): MemberRow[] {
+  return getDb()
+    .prepare(
+      "SELECT * FROM members WHERE user_id = ? ORDER BY status ASC, name COLLATE NOCASE ASC"
+    )
+    .all(userId) as MemberRow[];
 }
 
 export function getBudgetItems(userId: number): BudgetItemRow[] {
