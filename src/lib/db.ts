@@ -6,7 +6,6 @@ const DATA_DIR = path.join(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 declare global {
-  // eslint-disable-next-line no-var
   var __chapterosDb: Database.Database | undefined;
 }
 
