@@ -68,45 +68,58 @@ export async function completeOnboarding(payload: OnboardingPayload): Promise<vo
   redirect("/dashboard");
 }
 
-export async function updateScenarios(formData: FormData): Promise<void> {
-  const user = await requireUser();
-  getDb()
-    .prepare(
-      `UPDATE settings SET
-        pledges_conservative = ?, pledges_expected = ?, pledges_optimistic = ?
-      WHERE user_id = ?`
-    )
-    .run(
-      clampInt(formData.get("conservative")),
-      clampInt(formData.get("expected")),
-      clampInt(formData.get("optimistic")),
-      user.id
-    );
-  revalidatePath("/scenarios");
-  revalidatePath("/dashboard");
+export interface BudgetSettingsPayload {
+  activeMembers: number;
+  activeDues: number;
+  pledgeDues: number;
+  collectionRate: number; // percent, 0-100
+  pledgesConservative: number;
+  pledgesExpected: number;
+  pledgesOptimistic: number;
+  startingBalance: number;
+  duesCollected: number;
+  reserveTarget: number;
+  semesterStart: string; // YYYY-MM-DD
+  semesterEnd: string;
 }
 
-export async function updateFinancials(formData: FormData): Promise<void> {
+function parseIsoDate(v: unknown, fallback: string): string {
+  const s = String(v ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : fallback;
+}
+
+/** Saves the Budget tab's Money In panel — membership, dues, scenarios,
+ * balances, and the semester window — in one shot (used by auto-save). */
+export async function updateBudgetSettings(
+  payload: BudgetSettingsPayload
+): Promise<void> {
   const user = await requireUser();
+  const sem = defaultSemester();
   getDb()
     .prepare(
       `UPDATE settings SET
-        active_members = ?, active_dues = ?, pledge_dues = ?,
-        collection_rate = ?, starting_balance = ?, dues_collected = ?,
-        reserve_target = ?
+        active_members = ?, active_dues = ?, pledge_dues = ?, collection_rate = ?,
+        pledges_conservative = ?, pledges_expected = ?, pledges_optimistic = ?,
+        starting_balance = ?, dues_collected = ?, reserve_target = ?,
+        semester_start = ?, semester_end = ?
       WHERE user_id = ?`
     )
     .run(
-      clampInt(formData.get("active_members")),
-      clampMoney(formData.get("active_dues")),
-      clampMoney(formData.get("pledge_dues")),
-      Math.min(100, Math.max(0, Number(formData.get("collection_rate")) || 0)) / 100,
-      clampMoney(formData.get("starting_balance")),
-      clampMoney(formData.get("dues_collected")),
-      clampMoney(formData.get("reserve_target")),
+      clampInt(payload.activeMembers),
+      clampMoney(payload.activeDues),
+      clampMoney(payload.pledgeDues),
+      Math.min(100, Math.max(0, Number(payload.collectionRate) || 0)) / 100,
+      clampInt(payload.pledgesConservative),
+      clampInt(payload.pledgesExpected),
+      clampInt(payload.pledgesOptimistic),
+      clampMoney(payload.startingBalance),
+      clampMoney(payload.duesCollected),
+      clampMoney(payload.reserveTarget),
+      parseIsoDate(payload.semesterStart, sem.start),
+      parseIsoDate(payload.semesterEnd, sem.end),
       user.id
     );
-  revalidatePath("/settings");
+  revalidatePath("/budget");
   revalidatePath("/dashboard");
   revalidatePath("/scenarios");
 }

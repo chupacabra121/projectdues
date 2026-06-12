@@ -8,7 +8,6 @@ const LINKS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/budget", label: "Budget" },
   { href: "/scenarios", label: "Scenarios" },
-  { href: "/settings", label: "Settings" },
 ];
 
 export default function AppNav({ chapterName }: { chapterName: string }) {

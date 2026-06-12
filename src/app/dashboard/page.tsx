@@ -10,7 +10,7 @@ export default async function DashboardPage() {
   const items = getBudgetItems(user.id);
   const forecast = buildForecast(settings, items);
 
-  const available = settings.starting_balance + forecast.projectedRevenue;
+  const available = settings.starting_balance + forecast.totalIncome;
   const upcoming = items
     .filter((i) => i.date)
     .sort((a, b) => (a.date! < b.date! ? -1 : 1));
@@ -32,8 +32,12 @@ export default async function DashboardPage() {
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <HealthCard
             label="Projected Revenue"
-            value={fmtUSD(forecast.projectedRevenue)}
-            sub={`${settings.active_members} actives + ${settings.pledges_expected} expected pledges`}
+            value={fmtUSD(forecast.totalIncome)}
+            sub={
+              forecast.otherIncome > 0
+                ? `${fmtUSD(forecast.projectedRevenue)} dues + ${fmtUSD(forecast.otherIncome)} other income`
+                : `${settings.active_members} actives + ${settings.pledges_expected} expected pledges`
+            }
           />
           <HealthCard
             label="Outstanding Dues"
@@ -117,7 +121,11 @@ export default async function DashboardPage() {
                     <li key={item.id} className="ml-5">
                       <span
                         className={`absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full ${
-                          item.type === "fixed_expense" ? "bg-amber-500" : "bg-indigo-500"
+                          item.type === "fixed_expense"
+                            ? "bg-amber-500"
+                            : item.type === "other_income"
+                              ? "bg-emerald-500"
+                              : "bg-indigo-500"
                         }`}
                       />
                       <div className="flex items-baseline justify-between gap-4">
@@ -128,7 +136,12 @@ export default async function DashboardPage() {
                             {item.frequency === "monthly" && " · monthly"}
                           </p>
                         </div>
-                        <p className="text-sm font-semibold whitespace-nowrap">
+                        <p
+                          className={`text-sm font-semibold whitespace-nowrap ${
+                            item.type === "other_income" ? "text-emerald-600" : ""
+                          }`}
+                        >
+                          {item.type === "other_income" ? "+" : ""}
                           {fmtUSD(item.amount)}
                         </p>
                       </div>

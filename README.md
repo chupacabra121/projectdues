@@ -13,11 +13,15 @@ treasurers:
 - **Onboarding wizard** — import a roster (CSV/XLSX with automatic member/pledge
   detection) or start from scratch with just headcounts, then set dues and an
   expected collection rate. Revenue is forecast live as you type.
-- **Budget** — two lists that match how treasurers actually think: *Fixed
-  Obligations* (things we must pay: national fees, rent, insurance) and
-  *Planned Events* (things we want to do: formal, rush, retreats). Events are
-  auto-categorized (Social, Recruitment, Brotherhood, …) with manual override.
-  Obligations support one-time, monthly, and yearly frequencies.
+- **Budget workbench** — everything on one tab. A *Money In* panel holds
+  membership, dues, collection rate, all three pledge-class scenarios,
+  balances, reserve target, and the semester window — with debounced
+  auto-save and the forecast recalculating live as you type, plus an *Other
+  Income* list for fundraisers, donations, and allocations. *Fixed
+  Obligations* (things we must pay) and *Planned Events* (things we want to
+  do) sit below, with inline click-to-edit on every item. Items are
+  auto-categorized with manual override; obligations support one-time,
+  monthly, and yearly frequencies.
 - **Forecasting** — projected revenue, total obligations, total planned events,
   and projected end-of-semester balance, recomputed on every change.
 - **Scenario planning** — conservative / expected / optimistic pledge-class

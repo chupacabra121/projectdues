@@ -22,7 +22,7 @@ export interface ForecastSettings {
 
 export interface ForecastItem {
   id?: number;
-  type: "fixed_expense" | "planned_event";
+  type: "fixed_expense" | "planned_event" | "other_income";
   name: string;
   amount: number;
   date: string | null;
@@ -39,6 +39,8 @@ export interface ScenarioForecast {
 
 export interface Forecast {
   projectedRevenue: number;
+  otherIncome: number;
+  totalIncome: number;
   outstandingDues: number;
   fixedObligations: number;
   plannedEvents: number;
@@ -96,11 +98,12 @@ export function buildForecast(
   items: ForecastItem[]
 ): Forecast {
   const projectedRevenue = revenueFor(s, s.pledges_expected);
+  const otherIncome = totalFor(items, "other_income", s);
   const fixedObligations = totalFor(items, "fixed_expense", s);
   const plannedEvents = totalFor(items, "planned_event", s);
   const totalCommitted = fixedObligations + plannedEvents;
-  const remainingBalance =
-    s.starting_balance + projectedRevenue - totalCommitted;
+  const totalIncome = projectedRevenue + otherIncome;
+  const remainingBalance = s.starting_balance + totalIncome - totalCommitted;
 
   const scenarios: ScenarioForecast[] = (
     [
@@ -114,12 +117,14 @@ export function buildForecast(
       label,
       pledgeCount,
       projectedRevenue: rev,
-      remainingBalance: s.starting_balance + rev - totalCommitted,
+      remainingBalance: s.starting_balance + rev + otherIncome - totalCommitted,
     };
   });
 
   return {
     projectedRevenue,
+    otherIncome,
+    totalIncome,
     outstandingDues: Math.max(0, projectedRevenue - s.dues_collected),
     fixedObligations,
     plannedEvents,
@@ -128,6 +133,7 @@ export function buildForecast(
     scenarios,
     insights: buildInsights(s, items, {
       projectedRevenue,
+      otherIncome,
       fixedObligations,
       plannedEvents,
       remainingBalance,
@@ -140,6 +146,7 @@ function buildInsights(
   items: ForecastItem[],
   f: {
     projectedRevenue: number;
+    otherIncome: number;
     fixedObligations: number;
     plannedEvents: number;
     remainingBalance: number;
@@ -199,7 +206,8 @@ function buildInsights(
   // Recruitment downside risk
   const conservativeRemaining =
     s.starting_balance +
-    revenueFor(s, s.pledges_conservative) -
+    revenueFor(s, s.pledges_conservative) +
+    f.otherIncome -
     f.fixedObligations -
     f.plannedEvents;
   if (f.remainingBalance >= 0 && conservativeRemaining < 0) {

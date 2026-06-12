@@ -43,7 +43,7 @@ function createDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS budget_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
-      type TEXT NOT NULL CHECK (type IN ('fixed_expense', 'planned_event')),
+      type TEXT NOT NULL CHECK (type IN ('fixed_expense', 'planned_event', 'other_income')),
       name TEXT NOT NULL,
       amount REAL NOT NULL,
       date TEXT,
@@ -55,7 +55,38 @@ function createDb(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_budget_items_user ON budget_items(user_id);
   `);
+  migrateBudgetItemTypes(db);
   return db;
+}
+
+/** Older databases restricted budget_items.type to expense/event; SQLite can't
+ * alter CHECK constraints, so rebuild the table when other_income is missing. */
+function migrateBudgetItemTypes(db: Database.Database) {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='budget_items'")
+    .get() as { sql: string } | undefined;
+  if (!row || row.sql.includes("other_income")) return;
+  db.exec(`
+    BEGIN;
+    CREATE TABLE budget_items_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      type TEXT NOT NULL CHECK (type IN ('fixed_expense', 'planned_event', 'other_income')),
+      name TEXT NOT NULL,
+      amount REAL NOT NULL,
+      date TEXT,
+      frequency TEXT NOT NULL DEFAULT 'one_time' CHECK (frequency IN ('one_time', 'monthly', 'yearly')),
+      category TEXT NOT NULL DEFAULT '',
+      attendance INTEGER,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    INSERT INTO budget_items_new SELECT * FROM budget_items;
+    DROP TABLE budget_items;
+    ALTER TABLE budget_items_new RENAME TO budget_items;
+    CREATE INDEX IF NOT EXISTS idx_budget_items_user ON budget_items(user_id);
+    COMMIT;
+  `);
 }
 
 export function getDb(): Database.Database {
@@ -91,7 +122,7 @@ export interface SettingsRow {
 export interface BudgetItemRow {
   id: number;
   user_id: number;
-  type: "fixed_expense" | "planned_event";
+  type: "fixed_expense" | "planned_event" | "other_income";
   name: string;
   amount: number;
   date: string | null;

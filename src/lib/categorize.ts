@@ -18,6 +18,14 @@ export const EXPENSE_CATEGORIES = [
   "Other",
 ] as const;
 
+export const INCOME_CATEGORIES = [
+  "Fundraising",
+  "Donations",
+  "University Allocation",
+  "Sponsorship",
+  "Other",
+] as const;
+
 const EVENT_RULES: Array<[RegExp, (typeof EVENT_CATEGORIES)[number]]> = [
   [/rush|recruit|bid\s?day|pref/i, "Recruitment"],
   [/formal|semi|mixer|social|date\s?(party|night)|tailgate|homecoming/i, "Social"],
@@ -41,5 +49,17 @@ export function categorizeEvent(name: string): string {
 
 export function categorizeExpense(name: string): string {
   for (const [re, cat] of EXPENSE_RULES) if (re.test(name)) return cat;
+  return "Other";
+}
+
+const INCOME_RULES: Array<[RegExp, (typeof INCOME_CATEGORIES)[number]]> = [
+  [/fundrais|raffle|car\s?wash|sale|merch|t-?shirt/i, "Fundraising"],
+  [/donat|alumni|gift|parent/i, "Donations"],
+  [/university|sga|student\s?(gov|org)|allocation|grant/i, "University Allocation"],
+  [/sponsor|partner/i, "Sponsorship"],
+];
+
+export function categorizeIncome(name: string): string {
+  for (const [re, cat] of INCOME_RULES) if (re.test(name)) return cat;
   return "Other";
 }
