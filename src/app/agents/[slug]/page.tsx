@@ -14,9 +14,9 @@ export default async function AgentTeaserPage({
   const { slug } = await params;
   const agent = getAgent(slug);
   if (!agent) notFound();
-  // Active agents have their own segment (e.g. /agents/budgeting); this
-  // dynamic route only hosts the in-preparation team members.
-  if (agent.status === "active") redirect(`/agents/${agent.slug}`);
+  // Active agents work out of the main tabs; this dynamic route only hosts
+  // the in-preparation team members.
+  if (agent.status === "active") redirect(agent.href);
 
   const user = await requireOnboardedUser();
 
@@ -24,11 +24,11 @@ export default async function AgentTeaserPage({
     <AppShell chapterName={user.chapter_name}>
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <Link
-          href="/agents"
+          href="/dashboard"
           className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4" />
-          All agents
+          Back to dashboard
         </Link>
 
         <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">

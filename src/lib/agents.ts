@@ -5,6 +5,8 @@
 
 export interface AgentProfile {
   slug: string;
+  /** Where tapping the agent takes you — Penny's office is the main tabs. */
+  href: string;
   name: string;
   role: string;
   status: "active" | "soon";
@@ -21,6 +23,7 @@ export interface AgentProfile {
 export const AGENTS: AgentProfile[] = [
   {
     slug: "budgeting",
+    href: "/dashboard",
     name: "Penny",
     role: "Budgeting",
     status: "active",
@@ -33,6 +36,7 @@ export const AGENTS: AgentProfile[] = [
   },
   {
     slug: "dues-collection",
+    href: "/agents/dues-collection",
     name: "Dunn",
     role: "Dues Collection",
     status: "soon",
@@ -44,12 +48,13 @@ export const AGENTS: AgentProfile[] = [
     subtabs: ["Reminders", "Escalations", "Collections"],
     today: {
       text: "Until Dunn arrives: filter the roster to unpaid members and copy their emails or phone numbers in one click.",
-      href: "/agents/budgeting/members",
+      href: "/members",
       label: "Open the roster",
     },
   },
   {
     slug: "recruitment",
+    href: "/agents/recruitment",
     name: "Russ",
     role: "Recruitment",
     status: "soon",
@@ -61,12 +66,13 @@ export const AGENTS: AgentProfile[] = [
     subtabs: ["Pipeline", "Rush Budget", "Bids"],
     today: {
       text: "Until Russ arrives: stress-test conservative, expected, and optimistic pledge classes with Penny.",
-      href: "/agents/budgeting/scenarios",
+      href: "/scenarios",
       label: "Open scenarios",
     },
   },
   {
     slug: "events",
+    href: "/agents/events",
     name: "Evie",
     role: "Events",
     status: "soon",
@@ -78,7 +84,7 @@ export const AGENTS: AgentProfile[] = [
     subtabs: ["Calendar", "Deposits", "Per-Head Costs"],
     today: {
       text: "Until Evie arrives: planned events live in Penny's budget with dates, attendance, and cost per person.",
-      href: "/agents/budgeting/budget",
+      href: "/budget",
       label: "Open the budget",
     },
   },

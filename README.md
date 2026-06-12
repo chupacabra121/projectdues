@@ -10,22 +10,24 @@ treasurers:
 
 ## How it's organized
 
-The app is built around **agents with human faces**, not tabs. The home
-screen is an agents hub: four AI-generated teammates up top — tap a face to
-step into their office. **Penny (Budgeting)** is live today with four subtabs
-— Overview, Budget, Members, and Scenarios. **Dunn (Dues Collection — mass
-email/SMS reminders)**, **Russ (Recruitment)**, and **Evie (Events)** have
-profile pages with their planned workspaces, unlocking as they ship. Agent
-portraits are AI-generated (StyleGAN2 via thispersondoesnotexist.com); the
-visual language (warm near-white surfaces, one emerald accent, serif display
-headings, pill navigation) is inspired by finia.ro.
+Every page shares a two-row header: the main tabs up top (Dashboard,
+Budget, Members, Scenarios) with the **agent team strip right below** — four
+AI-generated teammates with photos; tap one to step into their office.
+**Penny (Budgeting)** runs the main tabs and signs the dashboard's next-action
+card. **Dunn (Dues Collection — mass email/SMS reminders)**, **Russ
+(Recruitment)**, and **Evie (Events)** have office pages with their planned
+workspaces, unlocking as they ship. The first page after login is the general
+dashboard: a time-aware greeting, key numbers, Penny's next action, and the
+full semester forecast. Agent portraits are AI-generated (StyleGAN2 via
+thispersondoesnotexist.com); the visual language (warm near-white surfaces,
+one emerald accent, serif display headings, pill navigation) is inspired by
+finia.ro.
 
 ## What's in V1
 
-- **Agents hub** — the team's faces up top, impact tiles, a "next action"
-  card signed by Penny and computed from your live forecast (deficit → review
-  budget; unpaid dues → open the roster), and agent cards with
-  active/coming-soon status.
+- **Dashboard home** — greeting, impact tiles, and a "next action" card
+  signed by Penny, computed from your live forecast (deficit → review budget;
+  unpaid dues → open the roster), above the full semester overview.
 - **Onboarding wizard** — import a roster (CSV/XLSX with automatic detection
   of status, name, email, and phone columns; alumni/inactive rows are
   skipped) or start from scratch with just headcounts, then set dues and an

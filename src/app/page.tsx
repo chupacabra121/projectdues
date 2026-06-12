@@ -6,5 +6,5 @@ export default async function Home() {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   const settings = getSettings(user.id);
-  redirect(settings?.onboarded ? "/agents" : "/onboarding");
+  redirect(settings?.onboarded ? "/dashboard" : "/onboarding");
 }
