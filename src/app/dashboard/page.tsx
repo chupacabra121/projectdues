@@ -4,6 +4,8 @@ import { ArrowRight, BellRing, Bot, Users, Wallet } from "lucide-react";
 import { requireOnboardedUser } from "@/lib/auth";
 import { getBudgetItems, getMembers, getSettings } from "@/lib/db";
 import { buildForecast, fmtUSD, fmtDate, Insight } from "@/lib/forecast";
+import { buildCashCurve, monthlyFlows } from "@/lib/cashflow";
+import { CashCurveChart, MonthlyFlowChart } from "@/components/Charts";
 import { getAgent } from "@/lib/agents";
 import AppShell from "@/components/AppShell";
 
@@ -27,6 +29,8 @@ export default async function DashboardPage() {
   const items = getBudgetItems(user.id);
   const members = getMembers(user.id);
   const forecast = buildForecast(settings, items);
+  const curve = buildCashCurve(settings, items);
+  const months = monthlyFlows(settings, items);
   const penny = getAgent("budgeting")!;
 
   const available = settings.starting_balance + forecast.totalIncome;
@@ -50,7 +54,7 @@ export default async function DashboardPage() {
         }
       : unpaid > 0
         ? {
-            title: `${unpaid} member${unpaid === 1 ? "" : "s"} still owe dues`,
+            title: `${unpaid} member${unpaid === 1 ? " still owes dues" : "s still owe dues"}`,
             body: `${fmtUSD(forecast.outstandingDues)} in dues is still out. Filter the roster to unpaid members and copy their emails for a reminder.`,
             cta: "Open member roster",
             href: "/members",
@@ -139,34 +143,37 @@ export default async function DashboardPage() {
           </div>
         </section>
 
-        {/* Financial health */}
-        <section className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <HealthCard
-            label="Projected Revenue"
-            value={fmtUSD(forecast.totalIncome)}
-            sub={
-              forecast.otherIncome > 0
-                ? `${fmtUSD(forecast.projectedRevenue)} dues + ${fmtUSD(forecast.otherIncome)} other income`
-                : `${settings.active_members} actives + ${settings.pledges_expected} expected pledges`
-            }
-          />
-          <HealthCard
-            label="Outstanding Dues"
-            value={fmtUSD(forecast.outstandingDues)}
-            sub={`${fmtUSD(settings.dues_collected)} collected so far`}
-          />
-          <HealthCard
-            label="Fixed Obligations"
-            value={fmtUSD(forecast.fixedObligations)}
-            sub={`${items.filter((i) => i.type === "fixed_expense").length} obligations`}
-          />
-          <HealthCard
-            label="End-of-Semester Balance"
-            value={fmtUSD(forecast.remainingBalance)}
-            sub={forecast.remainingBalance >= 0 ? "Projected surplus" : "Projected deficit"}
-            tone={forecast.remainingBalance >= 0 ? "good" : "bad"}
-          />
-        </section>
+        {/* Charts */}
+        {curve && (
+          <section className="mb-8 grid gap-6 lg:grid-cols-3">
+            <div className="rounded-2xl border border-border bg-card p-6 lg:col-span-2">
+              <div className="mb-1 flex items-baseline justify-between gap-3">
+                <h3 className="font-semibold text-foreground">Cash Through the Semester</h3>
+                <span
+                  className={`text-sm font-semibold ${
+                    curve.min.balance < 0 ? "text-destructive" : "text-primary"
+                  }`}
+                >
+                  {curve.min.balance < 0
+                    ? `dips ${fmtUSD(-curve.min.balance)} below zero`
+                    : "stays above zero"}
+                </span>
+              </div>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Projected balance week by week — dues arrive over the first six
+                weeks, expenses hit on their dates
+              </p>
+              <CashCurveChart curve={curve} reserveTarget={settings.reserve_target} />
+            </div>
+            <div className="rounded-2xl border border-border bg-card p-6">
+              <h3 className="mb-1 font-semibold text-foreground">In vs Out, Monthly</h3>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Where the semester&apos;s money moves
+              </p>
+              <MonthlyFlowChart months={months} />
+            </div>
+          </section>
+        )}
 
         <div className="grid gap-6 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
@@ -340,38 +347,6 @@ function ImpactTile({
       >
         {value}
       </p>
-    </div>
-  );
-}
-
-function HealthCard({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone?: "good" | "bad";
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p
-        className={`mt-1.5 text-2xl font-semibold ${
-          tone === "good"
-            ? "text-primary"
-            : tone === "bad"
-              ? "text-destructive"
-              : "text-foreground"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
     </div>
   );
 }

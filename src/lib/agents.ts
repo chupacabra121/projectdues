@@ -23,7 +23,7 @@ export interface AgentProfile {
 export const AGENTS: AgentProfile[] = [
   {
     slug: "budgeting",
-    href: "/dashboard",
+    href: "/budget",
     name: "Penny",
     role: "Budgeting",
     status: "active",
