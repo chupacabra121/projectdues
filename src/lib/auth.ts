@@ -4,9 +4,9 @@ import { redirect } from "next/navigation";
 import { getDb, getSettings, UserRow } from "./db";
 
 const SECRET = new TextEncoder().encode(
-  process.env.SESSION_SECRET ?? "chapteros-dev-secret-change-in-production"
+  process.env.SESSION_SECRET ?? "simpledues-dev-secret-change-in-production"
 );
-const COOKIE_NAME = "chapteros_session";
+const COOKIE_NAME = "simpledues_session";
 
 export async function createSession(userId: number): Promise<void> {
   const token = await new SignJWT({ sub: String(userId) })

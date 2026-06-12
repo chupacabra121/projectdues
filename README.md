@@ -1,8 +1,8 @@
-# ChapterOS
+# SimpleDues
 
-Budgeting and financial forecasting for fraternities and student organizations.
+Dues, budgets, and forecasts made simple for fraternities and student organizations.
 
-ChapterOS is **not** accounting software. There are no ledgers, receipts, or
+SimpleDues is **not** accounting software. There are no ledgers, receipts, or
 reimbursements. It is a planning tool built to answer one question for chapter
 treasurers:
 
@@ -10,19 +10,22 @@ treasurers:
 
 ## How it's organized
 
-The app is built around **agents**, not tabs. The home screen is an agents hub
-showing your operating team; the **Budgeting Agent** is live today with four
-subtabs — Overview, Budget, Members, and Scenarios — and the hub stakes out
-what's next: a Dues Collection Agent (mass email/SMS reminders), a Recruitment
-Agent, and an Events Agent. The visual language (warm near-white surfaces, one
-emerald accent, serif display headings, pill navigation) is inspired by
-finia.ro.
+The app is built around **agents with human faces**, not tabs. The home
+screen is an agents hub: four AI-generated teammates up top — tap a face to
+step into their office. **Penny (Budgeting)** is live today with four subtabs
+— Overview, Budget, Members, and Scenarios. **Dunn (Dues Collection — mass
+email/SMS reminders)**, **Russ (Recruitment)**, and **Evie (Events)** have
+profile pages with their planned workspaces, unlocking as they ship. Agent
+portraits are AI-generated (StyleGAN2 via thispersondoesnotexist.com); the
+visual language (warm near-white surfaces, one emerald accent, serif display
+headings, pill navigation) is inspired by finia.ro.
 
 ## What's in V1
 
-- **Agents hub** — impact tiles, a "next action" card computed from your live
-  forecast (deficit → review budget; unpaid dues → open the roster), and the
-  agent roster with active/coming-soon status.
+- **Agents hub** — the team's faces up top, impact tiles, a "next action"
+  card signed by Penny and computed from your live forecast (deficit → review
+  budget; unpaid dues → open the roster), and agent cards with
+  active/coming-soon status.
 - **Onboarding wizard** — import a roster (CSV/XLSX with automatic detection
   of status, name, email, and phone columns; alumni/inactive rows are
   skipped) or start from scratch with just headcounts, then set dues and an

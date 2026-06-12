@@ -18,7 +18,7 @@ export default function AppShell({
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
           <Link href="/agents" className="font-display text-2xl tracking-tight text-foreground">
-            Chapter<span className="text-primary">OS</span>
+            Simple<span className="text-primary">Dues</span>
           </Link>
           <div className="flex items-center gap-3">
             <span className="hidden sm:inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm text-foreground">

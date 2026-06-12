@@ -14,9 +14,9 @@ const instrumentSerif = Instrument_Serif({
 });
 
 export const metadata: Metadata = {
-  title: "ChapterOS",
+  title: "SimpleDues",
   description:
-    "Budgeting and financial forecasting agents for fraternities and student organizations.",
+    "Dues, budgets, and forecasts made simple for fraternities and student organizations — run by a team of agents.",
 };
 
 export default function RootLayout({

@@ -6,11 +6,11 @@ const DATA_DIR = path.join(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 declare global {
-  var __chapterosDb: Database.Database | undefined;
+  var __simpleduesDb: Database.Database | undefined;
 }
 
 function createDb(): Database.Database {
-  const db = new Database(path.join(DATA_DIR, "chapteros.db"));
+  const db = new Database(path.join(DATA_DIR, "simpledues.db"));
   db.pragma("journal_mode = WAL");
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -101,8 +101,8 @@ function migrateBudgetItemTypes(db: Database.Database) {
 }
 
 export function getDb(): Database.Database {
-  if (!global.__chapterosDb) global.__chapterosDb = createDb();
-  return global.__chapterosDb;
+  if (!global.__simpleduesDb) global.__simpleduesDb = createDb();
+  return global.__simpleduesDb;
 }
 
 export interface UserRow {

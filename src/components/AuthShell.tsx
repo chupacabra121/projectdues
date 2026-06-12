@@ -2,7 +2,7 @@ export function Logo({ className = "" }: { className?: string }) {
   return (
     <div className={`flex items-center justify-center ${className}`}>
       <span className="font-display text-3xl tracking-tight text-foreground">
-        Chapter<span className="text-primary">OS</span>
+        Simple<span className="text-primary">Dues</span>
       </span>
     </div>
   );
