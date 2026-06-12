@@ -18,6 +18,8 @@ export interface ForecastSettings {
   reserve_target: number;
   semester_start: string; // YYYY-MM-DD
   semester_end: string;
+  /** When dues arrive: sixweek | upfront | monthly | thirds. */
+  dues_schedule?: string;
 }
 
 export interface ForecastItem {
@@ -25,9 +27,16 @@ export interface ForecastItem {
   type: "fixed_expense" | "planned_event" | "other_income";
   name: string;
   amount: number;
+  /** Real cost once known — replaces the planned amount in every total. */
+  actual_amount?: number | null;
   date: string | null;
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
+}
+
+/** The number the math should use: actual cost once known, plan until then. */
+export function effectiveAmount(item: ForecastItem): number {
+  return item.actual_amount ?? item.amount;
 }
 
 export interface ScenarioForecast {
@@ -41,6 +50,8 @@ export interface Forecast {
   projectedRevenue: number;
   otherIncome: number;
   totalIncome: number;
+  /** Σ(actual − planned) across items with a known actual. >0 = over plan. */
+  variance: number;
   outstandingDues: number;
   fixedObligations: number;
   plannedEvents: number;
@@ -80,7 +91,7 @@ export function occurrences(item: ForecastItem, s: ForecastSettings): number {
 }
 
 export function itemSemesterCost(item: ForecastItem, s: ForecastSettings): number {
-  return item.amount * occurrences(item, s);
+  return effectiveAmount(item) * occurrences(item, s);
 }
 
 export function totalFor(
@@ -95,7 +106,8 @@ export function totalFor(
 
 export function buildForecast(
   s: ForecastSettings,
-  items: ForecastItem[]
+  items: ForecastItem[],
+  caps: Record<string, number> = {}
 ): Forecast {
   const projectedRevenue = revenueFor(s, s.pledges_expected);
   const otherIncome = totalFor(items, "other_income", s);
@@ -104,6 +116,12 @@ export function buildForecast(
   const totalCommitted = fixedObligations + plannedEvents;
   const totalIncome = projectedRevenue + otherIncome;
   const remainingBalance = s.starting_balance + totalIncome - totalCommitted;
+  const variance = items
+    .filter((i) => i.type !== "other_income" && i.actual_amount != null)
+    .reduce(
+      (sum, i) => sum + (i.actual_amount! - i.amount) * occurrences(i, s),
+      0
+    );
 
   const scenarios: ScenarioForecast[] = (
     [
@@ -125,18 +143,20 @@ export function buildForecast(
     projectedRevenue,
     otherIncome,
     totalIncome,
+    variance,
     outstandingDues: Math.max(0, projectedRevenue - s.dues_collected),
     fixedObligations,
     plannedEvents,
     remainingBalance,
     totalCommitted,
     scenarios,
-    insights: buildInsights(s, items, {
+    insights: buildInsights(s, items, caps, {
       projectedRevenue,
       otherIncome,
       fixedObligations,
       plannedEvents,
       remainingBalance,
+      variance,
     }),
   };
 }
@@ -144,12 +164,14 @@ export function buildForecast(
 function buildInsights(
   s: ForecastSettings,
   items: ForecastItem[],
+  caps: Record<string, number>,
   f: {
     projectedRevenue: number;
     otherIncome: number;
     fixedObligations: number;
     plannedEvents: number;
     remainingBalance: number;
+    variance: number;
   }
 ): Insight[] {
   const insights: Insight[] = [];
@@ -188,6 +210,51 @@ function buildInsights(
         text: `Projected balance falls ${fmtUSD(s.reserve_target - f.remainingBalance)} short of your ${fmtUSD(s.reserve_target)} reserve target.`,
       });
     }
+  }
+
+  // Plan vs reality
+  if (f.variance !== 0) {
+    const tracked = items.filter(
+      (i) => i.type !== "other_income" && i.actual_amount != null
+    );
+    const biggestMiss = tracked.reduce((a, b) =>
+      Math.abs((b.actual_amount! - b.amount)) > Math.abs((a.actual_amount! - a.amount)) ? b : a
+    );
+    const missDelta = biggestMiss.actual_amount! - biggestMiss.amount;
+    insights.push({
+      tone: f.variance > 0 ? "warn" : "good",
+      text:
+        f.variance > 0
+          ? `Actual costs are running ${fmtUSD(f.variance)} over plan${missDelta > 0 ? ` — ${biggestMiss.name} alone came in ${fmtUSD(missDelta)} high` : ""}.`
+          : `Actual costs are running ${fmtUSD(-f.variance)} under plan — that's extra cushion.`,
+    });
+  }
+
+  // Allocation caps ("no committee spends past its budget")
+  const spendByCategory = new Map<string, number>();
+  for (const i of items) {
+    if (i.type === "other_income") continue;
+    spendByCategory.set(
+      i.category,
+      (spendByCategory.get(i.category) ?? 0) + itemSemesterCost(i, s)
+    );
+  }
+  for (const [category, cap] of Object.entries(caps)) {
+    const spend = spendByCategory.get(category) ?? 0;
+    if (cap > 0 && spend > cap) {
+      insights.push({
+        tone: "bad",
+        text: `${category} is ${fmtUSD(spend - cap)} over its ${fmtUSD(cap)} allocation — trim it or move budget from another category.`,
+      });
+    }
+  }
+
+  // Rainy-day fund guidance (~5% of dues revenue is the common rule)
+  if (s.reserve_target <= 0 && f.projectedRevenue > 0) {
+    insights.push({
+      tone: "info",
+      text: `No reserve target set. A common rule is to set aside ~5% of dues revenue (${fmtUSD(f.projectedRevenue * 0.05)}) as a rainy-day fund.`,
+    });
   }
 
   // Biggest event trim suggestion

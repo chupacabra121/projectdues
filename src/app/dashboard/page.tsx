@@ -2,8 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, BellRing, Bot, Users, Wallet } from "lucide-react";
 import { requireOnboardedUser } from "@/lib/auth";
-import { getBudgetItems, getMembers, getSettings } from "@/lib/db";
-import { buildForecast, fmtUSD, fmtDate, Insight } from "@/lib/forecast";
+import { BudgetItemRow, getBudgetItems, getCategoryCaps, getMembers, getSettings, SettingsRow } from "@/lib/db";
+import { buildForecast, Forecast, fmtUSD, fmtDate, itemSemesterCost, Insight } from "@/lib/forecast";
 import { buildCashCurve, monthlyFlows } from "@/lib/cashflow";
 import { CashCurveChart, MonthlyFlowChart } from "@/components/Charts";
 import { getAgent } from "@/lib/agents";
@@ -28,7 +28,8 @@ export default async function DashboardPage() {
   const settings = getSettings(user.id)!;
   const items = getBudgetItems(user.id);
   const members = getMembers(user.id);
-  const forecast = buildForecast(settings, items);
+  const caps = getCategoryCaps(user.id);
+  const forecast = buildForecast(settings, items, caps);
   const curve = buildCashCurve(settings, items);
   const months = monthlyFlows(settings, items);
   const penny = getAgent("budgeting")!;
@@ -160,8 +161,13 @@ export default async function DashboardPage() {
                 </span>
               </div>
               <p className="mb-4 text-sm text-muted-foreground">
-                Projected balance week by week — dues arrive over the first six
-                weeks, expenses hit on their dates
+                Projected balance week by week —{" "}
+                {{
+                  upfront: "dues arrive at semester start",
+                  monthly: "dues arrive in monthly installments",
+                  thirds: "dues arrive as a ⅓ deposit plus two installments",
+                }[settings.dues_schedule] ?? "dues arrive over the first six weeks"}
+                , expenses hit on their dates
               </p>
               <CashCurveChart curve={curve} reserveTarget={settings.reserve_target} />
             </div>
@@ -318,6 +324,21 @@ export default async function DashboardPage() {
                 Stress-test scenarios →
               </Link>
             </section>
+
+            {/* Dues transparency */}
+            {settings.active_dues > 0 && forecast.totalIncome > 0 && (
+              <section className="rounded-2xl border border-border bg-card p-6">
+                <h3 className="font-semibold text-foreground">
+                  Where a Member&apos;s Dues Go
+                </h3>
+                <p className="mb-4 mt-1 text-sm text-muted-foreground">
+                  Each active&apos;s {fmtUSD(settings.active_dues)}, split the
+                  way the semester&apos;s money is planned — paste it in the
+                  chapter group chat.
+                </p>
+                <DuesBreakdown settings={settings} items={items} forecast={forecast} />
+              </section>
+            )}
           </div>
         </div>
       </div>
@@ -390,6 +411,78 @@ function InsightCard({ insight }: { insight: Insight }) {
   return (
     <div className={`rounded-xl px-4 py-3 text-sm leading-6 ${INSIGHT_STYLES[insight.tone]}`}>
       {insight.text}
+    </div>
+  );
+}
+
+
+function DuesBreakdown({
+  settings,
+  items,
+  forecast,
+}: {
+  settings: SettingsRow;
+  items: BudgetItemRow[];
+  forecast: Forecast;
+}) {
+  const pool = settings.starting_balance + forecast.totalIncome;
+  if (pool <= 0) return null;
+
+  const byCategory = new Map<string, number>();
+  for (const i of items) {
+    if (i.type === "other_income") continue;
+    byCategory.set(
+      i.category,
+      (byCategory.get(i.category) ?? 0) + itemSemesterCost(i, settings)
+    );
+  }
+  const dues = settings.active_dues;
+  const rows = Array.from(byCategory.entries())
+    .map(([category, spend]) => ({ category, share: (spend / pool) * dues }))
+    .sort((a, b) => b.share - a.share)
+    .slice(0, 6);
+  const allocated = rows.reduce((s, r) => s + r.share, 0);
+  const surplus = Math.max(0, dues - allocated);
+  const maxShare = Math.max(...rows.map((r) => r.share), surplus, 1);
+
+  return (
+    <div className="space-y-2.5">
+      {rows.map((r) => (
+        <DuesRow key={r.category} label={r.category} amount={r.share} max={maxShare} />
+      ))}
+      <DuesRow
+        label={forecast.remainingBalance >= 0 ? "Kept as reserve / cushion" : "Not covered by plans"}
+        amount={surplus}
+        max={maxShare}
+        muted
+      />
+    </div>
+  );
+}
+
+function DuesRow({
+  label,
+  amount,
+  max,
+  muted,
+}: {
+  label: string;
+  amount: number;
+  max: number;
+  muted?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-36 shrink-0 truncate text-sm text-muted-foreground">{label}</span>
+      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full ${muted ? "bg-muted-foreground/40" : "bg-primary"}`}
+          style={{ width: `${Math.max(2, (amount / max) * 100)}%` }}
+        />
+      </div>
+      <span className="w-14 shrink-0 text-right text-sm font-medium text-foreground">
+        {fmtUSD(amount)}
+      </span>
     </div>
   );
 }

@@ -48,7 +48,12 @@ finia.ro.
   imports bring contact info in automatically, and a one-click sync pushes
   roster headcounts and collected dues into the budget.
 - **Forecasting** — projected revenue, total obligations, total planned events,
-  and projected end-of-semester balance, recomputed on every change.
+  and projected end-of-semester balance, recomputed on every change. Items
+  take an **actual cost** once known (variance vs plan tracked everywhere),
+  categories take **allocation caps** (the no-committee-overspends rule), and
+  the cash curve follows your **dues schedule** (six-week ramp, upfront,
+  monthly installments, or thirds). The dashboard adds a "where a member's
+  dues go" transparency card and rainy-day reserve guidance (~5% of dues).
 - **Scenario planning** — conservative / expected / optimistic pledge-class
   sizes, each with its own full forecast.
 - **Dashboard** — financial health cards, budget status bars, a timeline of

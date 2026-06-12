@@ -65,9 +65,31 @@ function createDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
+
+    CREATE TABLE IF NOT EXISTS category_caps (
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      category TEXT NOT NULL,
+      cap REAL NOT NULL,
+      PRIMARY KEY (user_id, category)
+    );
   `);
   migrateBudgetItemTypes(db);
+  addColumnIfMissing(db, "budget_items", "actual_amount", "REAL");
+  addColumnIfMissing(db, "settings", "dues_schedule", "TEXT NOT NULL DEFAULT 'sixweek'");
   return db;
+}
+
+/** ALTER TABLE ADD COLUMN guard for upgrading existing local databases. */
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  decl: string
+) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${decl}`);
+  }
 }
 
 /** Older databases restricted budget_items.type to expense/event; SQLite can't
@@ -115,6 +137,7 @@ export interface UserRow {
 export interface SettingsRow {
   user_id: number;
   onboarded: number;
+  dues_schedule: string;
   active_members: number;
   current_pledges: number;
   pledges_conservative: number;
@@ -136,6 +159,7 @@ export interface BudgetItemRow {
   type: "fixed_expense" | "planned_event" | "other_income";
   name: string;
   amount: number;
+  actual_amount: number | null;
   date: string | null;
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
@@ -176,6 +200,13 @@ export function getMembers(userId: number): MemberRow[] {
       "SELECT * FROM members WHERE user_id = ? ORDER BY status ASC, name COLLATE NOCASE ASC"
     )
     .all(userId) as MemberRow[];
+}
+
+export function getCategoryCaps(userId: number): Record<string, number> {
+  const rows = getDb()
+    .prepare("SELECT category, cap FROM category_caps WHERE user_id = ?")
+    .all(userId) as { category: string; cap: number }[];
+  return Object.fromEntries(rows.map((r) => [r.category, r.cap]));
 }
 
 export function getBudgetItems(userId: number): BudgetItemRow[] {

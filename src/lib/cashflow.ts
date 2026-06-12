@@ -1,12 +1,12 @@
 /**
  * Semester cash-curve math for the dashboard charts. Pure functions over the
  * same inputs as the forecast. Modeling assumptions, kept deliberately simple:
- *  - dues arrive evenly over the first six weeks (scaled by collection rate);
- *    anything already collected is in the bank on day one
+ *  - dues arrive per the chapter's schedule (six-week ramp, upfront,
+ *    monthly installments, or thirds); collected money is in the bank day one
  *  - undated items hit on day one (conservative for expenses)
  *  - monthly items recur on their day-of-month across the semester
  */
-import { ForecastItem, ForecastSettings, revenueFor } from "./forecast";
+import { ForecastItem, ForecastSettings, effectiveAmount, revenueFor } from "./forecast";
 
 export interface CashPoint {
   day: number;
@@ -57,13 +57,37 @@ function dailyFlows(
   // Day one: bank balance plus dues already collected.
   inflows[0] += s.starting_balance + s.dues_collected;
 
-  // Remaining dues arrive evenly across the ramp.
-  const ramp = Math.min(DUES_RAMP_DAYS, totalDays);
+  // Remaining dues arrive per the chapter's collection schedule.
   const remainingDues = Math.max(
     0,
     revenueFor(s, s.pledges_expected) - s.dues_collected
   );
-  for (let d = 0; d <= ramp; d++) inflows[d] += remainingDues / (ramp + 1);
+  const schedule = s.dues_schedule ?? "sixweek";
+  if (schedule === "upfront") {
+    inflows[0] += remainingDues;
+  } else if (schedule === "monthly") {
+    // Equal installments: semester start, then the 1st of each later month.
+    const installmentDays = [0];
+    const cursor = new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1)
+    );
+    while (cursor.getTime() <= end.getTime()) {
+      installmentDays.push(
+        Math.round((cursor.getTime() - start.getTime()) / DAY)
+      );
+      cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    }
+    for (const d of installmentDays)
+      inflows[d] += remainingDues / installmentDays.length;
+  } else if (schedule === "thirds") {
+    // ⅓ deposit, then two monthly installments.
+    for (const d of [0, 30, 60]) {
+      inflows[Math.min(d, totalDays)] += remainingDues / 3;
+    }
+  } else {
+    const ramp = Math.min(DUES_RAMP_DAYS, totalDays);
+    for (let d = 0; d <= ramp; d++) inflows[d] += remainingDues / (ramp + 1);
+  }
 
   const clampDay = (ds: string | null): number => {
     const dt = ds ? parseUTC(ds) : null;
@@ -76,6 +100,7 @@ function dailyFlows(
 
   for (const item of items) {
     const bucket = item.type === "other_income" ? inflows : outflows;
+    const amount = effectiveAmount(item);
     if (item.frequency === "monthly") {
       const dayOfMonth = item.date ? Number(item.date.slice(8, 10)) : 1;
       const cursor = new Date(
@@ -96,11 +121,11 @@ function dailyFlows(
           totalDays,
           Math.max(0, Math.round((hit - start.getTime()) / DAY))
         );
-        bucket[hitDay] += item.amount;
+        bucket[hitDay] += amount;
         cursor.setUTCMonth(cursor.getUTCMonth() + 1);
       }
     } else {
-      bucket[clampDay(item.date)] += item.amount;
+      bucket[clampDay(item.date)] += amount;
     }
   }
 

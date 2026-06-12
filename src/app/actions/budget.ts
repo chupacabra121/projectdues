@@ -38,6 +38,7 @@ interface ParsedItem {
   type: ItemType;
   name: string;
   amount: number;
+  actual_amount: number | null;
   date: string | null;
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
@@ -65,10 +66,13 @@ function parseItemForm(formData: FormData): ParsedItem | null {
       ? Math.round(attendanceRaw)
       : null;
 
+  const actualRaw = String(formData.get("actual_amount") ?? "").trim();
+
   return {
     type,
     name,
     amount: parseAmount(formData.get("amount")),
+    actual_amount: actualRaw === "" ? null : parseAmount(actualRaw),
     date: parseDate(formData.get("date")),
     frequency: type === "planned_event" ? "one_time" : frequency,
     category,
@@ -83,14 +87,15 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
   if (!item) return;
   getDb()
     .prepare(
-      `INSERT INTO budget_items (user_id, type, name, amount, date, frequency, category, attendance, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO budget_items (user_id, type, name, amount, actual_amount, date, frequency, category, attendance, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       user.id,
       item.type,
       item.name,
       item.amount,
+      item.actual_amount,
       item.date,
       item.frequency,
       item.category,
@@ -108,12 +113,13 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
   getDb()
     .prepare(
       `UPDATE budget_items SET
-        name = ?, amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, notes = ?
+        name = ?, amount = ?, actual_amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, notes = ?
        WHERE id = ? AND user_id = ? AND type = ?`
     )
     .run(
       item.name,
       item.amount,
+      item.actual_amount,
       item.date,
       item.frequency,
       item.category,
@@ -134,6 +140,26 @@ export async function updateBudgetItemCategory(formData: FormData): Promise<void
   getDb()
     .prepare("UPDATE budget_items SET category = ? WHERE id = ? AND user_id = ?")
     .run(category, id, user.id);
+  revalidateAll();
+}
+
+/** Set (or clear, with an empty/zero cap) a category spending allocation. */
+export async function setCategoryCap(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const category = String(formData.get("category") ?? "").trim();
+  if (!category) return;
+  const cap = parseAmount(formData.get("cap"));
+  const db = getDb();
+  if (cap > 0) {
+    db.prepare(
+      `INSERT INTO category_caps (user_id, category, cap) VALUES (?, ?, ?)
+       ON CONFLICT(user_id, category) DO UPDATE SET cap = excluded.cap`
+    ).run(user.id, category, cap);
+  } else {
+    db.prepare(
+      "DELETE FROM category_caps WHERE user_id = ? AND category = ?"
+    ).run(user.id, category);
+  }
   revalidateAll();
 }
 

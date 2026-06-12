@@ -2,17 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { updateBudgetSettings } from "@/app/actions/setup";
+import { setCategoryCap } from "@/app/actions/budget";
 import { BudgetItemRow, SettingsRow } from "@/lib/db";
 import {
   buildForecast,
   ForecastSettings,
   fmtUSD,
+  itemSemesterCost,
   revenueFor,
 } from "@/lib/forecast";
 import { AddItemForm, ItemRow } from "./ItemForms";
 import { inputCls } from "@/components/AuthShell";
 
 interface MoneyInState {
+  duesSchedule: string;
   activeMembers: string;
   activeDues: string;
   pledgeDues: string;
@@ -36,11 +39,14 @@ const int = (s: string) => Math.round(num(s));
 export default function Workbench({
   settings,
   items,
+  caps,
 }: {
   settings: SettingsRow;
   items: BudgetItemRow[];
+  caps: Record<string, number>;
 }) {
   const [s, setS] = useState<MoneyInState>({
+    duesSchedule: settings.dues_schedule || "sixweek",
     activeMembers: String(settings.active_members),
     activeDues: String(settings.active_dues),
     pledgeDues: String(settings.pledge_dues),
@@ -73,11 +79,15 @@ export default function Workbench({
       reserve_target: num(s.reserveTarget),
       semester_start: s.semesterStart,
       semester_end: s.semesterEnd,
+      dues_schedule: s.duesSchedule,
     }),
     [s, settings.current_pledges]
   );
 
-  const forecast = useMemo(() => buildForecast(live, items), [live, items]);
+  const forecast = useMemo(
+    () => buildForecast(live, items, caps),
+    [live, items, caps]
+  );
 
   // Debounced auto-save of the Money In panel.
   useEffect(() => {
@@ -102,6 +112,7 @@ export default function Workbench({
           reserveTarget: live.reserve_target,
           semesterStart: live.semester_start,
           semesterEnd: live.semester_end,
+          duesSchedule: s.duesSchedule,
         });
         setSaveState("saved");
       });
@@ -158,6 +169,18 @@ export default function Workbench({
             {sc.label} ({sc.pledgeCount}): {fmtUSD(sc.remainingBalance)}
           </span>
         ))}
+        {forecast.variance !== 0 && (
+          <span
+            className={`rounded-full px-3 py-1 font-medium ${
+              forecast.variance > 0
+                ? "bg-amber-500/10 text-amber-800"
+                : "bg-primary/10 text-accent-foreground"
+            }`}
+            title="Actual costs vs plan, across items with a known actual"
+          >
+            Actuals {forecast.variance > 0 ? "+" : "−"}{fmtUSD(Math.abs(forecast.variance))} vs plan
+          </span>
+        )}
       </div>
 
       {/* Money In */}
@@ -177,6 +200,24 @@ export default function Workbench({
           <Field label="Active Dues" value={s.activeDues} onChange={set("activeDues")} prefix="$" />
           <Field label="Pledge Dues" value={s.pledgeDues} onChange={set("pledgeDues")} prefix="$" />
           <Field label="Collection Rate" value={s.collectionRate} onChange={set("collectionRate")} suffix="%" max={100} />
+          <div>
+            <label className="mb-1 block text-sm font-medium text-foreground/80">
+              Dues Arrive
+            </label>
+            <select
+              value={s.duesSchedule}
+              onChange={(e) => setS((prev) => ({ ...prev, duesSchedule: e.target.value }))}
+              className={inputCls}
+            >
+              <option value="sixweek">Evenly over first 6 weeks</option>
+              <option value="upfront">All at semester start</option>
+              <option value="monthly">Monthly installments</option>
+              <option value="thirds">⅓ deposit + 2 installments</option>
+            </select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Drives the cash curve on the dashboard.
+            </p>
+          </div>
         </div>
 
         <p className="mb-3 mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -257,7 +298,122 @@ export default function Workbench({
           accent="text-foreground"
         />
       </div>
+
+      <Allocations items={items} settings={live} caps={caps} />
     </>
+  );
+}
+
+/**
+ * Committee-style allocations: cap what each category may spend. The classic
+ * treasurer rule — no committee spends past its budget without trading funds.
+ */
+function Allocations({
+  items,
+  settings,
+  caps,
+}: {
+  items: BudgetItemRow[];
+  settings: ForecastSettings;
+  caps: Record<string, number>;
+}) {
+  const spend = new Map<string, number>();
+  for (const i of items) {
+    if (i.type === "other_income") continue;
+    spend.set(i.category, (spend.get(i.category) ?? 0) + itemSemesterCost(i, settings));
+  }
+  const categories = Array.from(
+    new Set([...spend.keys(), ...Object.keys(caps)])
+  ).sort((a, b) => (spend.get(b) ?? 0) - (spend.get(a) ?? 0));
+
+  if (categories.length === 0) return null;
+
+  return (
+    <section className="mt-6 rounded-[1.5rem] border border-border bg-card p-6">
+      <h2 className="font-semibold text-foreground">Allocations</h2>
+      <p className="mb-5 mt-1 text-sm text-muted-foreground">
+        Give each category a spending cap — like handing every chair their
+        budget. Penny flags any category that plans past its cap.
+      </p>
+      <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
+        {categories.map((cat) => (
+          <AllocationRow
+            key={cat}
+            category={cat}
+            planned={spend.get(cat) ?? 0}
+            cap={caps[cat] ?? 0}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AllocationRow({
+  category,
+  planned,
+  cap,
+}: {
+  category: string;
+  planned: number;
+  cap: number;
+}) {
+  const [value, setValue] = useState(cap > 0 ? String(cap) : "");
+  const [isPending, startTransition] = useTransition();
+  const capNum = parseFloat(value) || 0;
+  const over = capNum > 0 && planned > capNum;
+  const pct = capNum > 0 ? Math.min(100, (planned / capNum) * 100) : 0;
+
+  function save() {
+    if (capNum === cap) return;
+    const fd = new FormData();
+    fd.set("category", category);
+    fd.set("cap", String(capNum));
+    startTransition(() => setCategoryCap(fd));
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-3">
+        <span className="min-w-0 truncate text-sm font-medium text-foreground">
+          {category}
+        </span>
+        <span className="flex items-center gap-2 text-sm">
+          <span className={over ? "font-semibold text-destructive" : "text-muted-foreground"}>
+            {fmtUSD(planned)}
+          </span>
+          <span className="text-muted-foreground">of</span>
+          <span className="relative">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
+            <input
+              type="number"
+              min={0}
+              value={value}
+              placeholder="no cap"
+              onChange={(e) => setValue(e.target.value)}
+              onBlur={save}
+              disabled={isPending}
+              className="w-24 rounded-lg border border-input bg-background py-1 pl-5 pr-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:opacity-50"
+            />
+          </span>
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        {capNum > 0 ? (
+          <div
+            className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`}
+            style={{ width: `${pct}%` }}
+          />
+        ) : (
+          <div className="h-full w-full bg-muted" />
+        )}
+      </div>
+      {over && (
+        <p className="mt-1 text-xs font-medium text-destructive">
+          {fmtUSD(planned - capNum)} over allocation
+        </p>
+      )}
+    </div>
   );
 }
 

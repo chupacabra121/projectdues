@@ -115,6 +115,26 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
           </div>
         )}
       </div>
+      {item && type !== "other_income" && (
+        <div>
+          <label className={labelCls}>
+            Actual Cost — once you know what it really cost
+            {item.frequency === "monthly" ? " (per month)" : ""}
+          </label>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <input
+              name="actual_amount" type="number" min={0} step="0.01"
+              defaultValue={item.actual_amount ?? ""}
+              className={`${inputCls} pl-7`} placeholder="leave blank until known"
+            />
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Replaces the planned amount in every forecast. Clear it to go back
+            to the plan.
+          </p>
+        </div>
+      )}
       <div>
         <label className={labelCls}>Notes (optional)</label>
         <input
@@ -223,7 +243,7 @@ export function ItemRow({
 
   const costPerPerson =
     item.type === "planned_event" && item.attendance
-      ? item.amount / item.attendance
+      ? (item.actual_amount ?? item.amount) / item.attendance
       : null;
 
   return (
@@ -238,6 +258,19 @@ export function ItemRow({
           <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
             {item.category}
           </span>
+          {item.actual_amount != null && item.actual_amount !== item.amount && (
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
+                item.actual_amount > item.amount
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-primary/10 text-accent-foreground"
+              }`}
+              title={`Planned ${fmtUSD(item.amount)}, actual ${fmtUSD(item.actual_amount)}`}
+            >
+              {item.actual_amount > item.amount ? "+" : "−"}
+              {fmtUSD(Math.abs(item.actual_amount - item.amount))} vs plan
+            </span>
+          )}
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {fmtDate(item.date)}
@@ -254,7 +287,12 @@ export function ItemRow({
             {fmtUSD(itemSemesterCost(item, settings))}
           </p>
           {n > 1 && (
-            <p className="text-xs text-muted-foreground">{fmtUSD(item.amount)}/mo</p>
+            <p className="text-xs text-muted-foreground">
+              {fmtUSD(item.actual_amount ?? item.amount)}/mo
+            </p>
+          )}
+          {item.actual_amount != null && n === 1 && (
+            <p className="text-xs text-muted-foreground">plan {fmtUSD(item.amount)}</p>
           )}
         </div>
         <button
