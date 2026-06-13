@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Building2, CalendarRange, Check, ChevronDown, Clock3, Plus } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { setActivePeriod } from "@/app/actions/periods";
@@ -138,6 +138,7 @@ function PeriodSwitcher({
   activePeriodId: number | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
   const active = periods.find((p) => p.id === activePeriodId) ?? periods[0];
 
@@ -148,6 +149,22 @@ function PeriodSwitcher({
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
   }, []);
+
+  // Call the server action programmatically rather than via a submit button
+  // inside the dropdown: closing the menu in the click handler would unmount
+  // the <form> mid-submit and cancel the action. Close only after it resolves.
+  function switchTo(id: number) {
+    if (id === active?.id) {
+      setOpen(false);
+      return;
+    }
+    const fd = new FormData();
+    fd.set("id", String(id));
+    startTransition(async () => {
+      await setActivePeriod(fd);
+      setOpen(false);
+    });
+  }
 
   if (!active) {
     return (
@@ -178,24 +195,23 @@ function PeriodSwitcher({
         <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-border bg-popover shadow-xl">
           <div className="max-h-72 overflow-y-auto py-1">
             {periods.map((p) => (
-              <form key={p.id} action={setActivePeriod}>
-                <input type="hidden" name="id" value={p.id} />
-                <button
-                  type="submit"
-                  onClick={() => setOpen(false)}
-                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {p.start} → {p.end}
-                    </p>
-                  </div>
-                  {p.id === active.id && (
-                    <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
-                  )}
-                </button>
-              </form>
+              <button
+                key={p.id}
+                type="button"
+                disabled={isPending}
+                onClick={() => switchTo(p.id)}
+                className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted disabled:opacity-60"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {p.start} → {p.end}
+                  </p>
+                </div>
+                {p.id === active.id && (
+                  <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+                )}
+              </button>
             ))}
           </div>
           <div className="border-t border-border/60 p-1">
