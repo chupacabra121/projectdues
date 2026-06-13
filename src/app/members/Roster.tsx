@@ -9,7 +9,7 @@ import {
   deleteMember,
   syncRosterToBudget,
 } from "@/app/actions/members";
-import { MemberRow, SettingsRow } from "@/lib/db";
+import { MemberRow, PeriodRow } from "@/lib/db";
 import { fmtUSD } from "@/lib/forecast";
 import { inputCls } from "@/components/AuthShell";
 
@@ -29,7 +29,7 @@ export default function Roster({
   settings,
 }: {
   members: MemberRow[];
-  settings: SettingsRow;
+  settings: PeriodRow;
 }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [copied, setCopied] = useState("");
@@ -239,7 +239,7 @@ function SyncBanner({
   actives: number;
   pledges: number;
   collected: number;
-  settings: SettingsRow;
+  settings: PeriodRow;
 }) {
   const [isPending, startTransition] = useTransition();
   return (

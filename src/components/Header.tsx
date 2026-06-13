@@ -3,8 +3,10 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Building2, Clock3 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Building2, CalendarRange, Check, ChevronDown, Clock3, Plus } from "lucide-react";
 import { logout } from "@/app/actions/auth";
+import { setActivePeriod } from "@/app/actions/periods";
 import { AGENTS } from "@/lib/agents";
 
 const TABS = [
@@ -14,7 +16,22 @@ const TABS = [
   { href: "/scenarios", label: "Scenarios" },
 ];
 
-export default function Header({ chapterName }: { chapterName: string }) {
+export interface PeriodOption {
+  id: number;
+  name: string;
+  start: string;
+  end: string;
+}
+
+export default function Header({
+  chapterName,
+  periods,
+  activePeriodId,
+}: {
+  chapterName: string;
+  periods: PeriodOption[];
+  activePeriodId: number | null;
+}) {
   const pathname = usePathname();
 
   return (
@@ -48,9 +65,10 @@ export default function Header({ chapterName }: { chapterName: string }) {
         </nav>
 
         <div className="flex flex-shrink-0 items-center gap-3">
-          <span className="hidden h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm text-foreground md:inline-flex">
+          <PeriodSwitcher periods={periods} activePeriodId={activePeriodId} />
+          <span className="hidden h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm text-foreground lg:inline-flex">
             <Building2 className="h-4 w-4 text-muted-foreground" />
-            <span className="max-w-[180px] truncate">{chapterName}</span>
+            <span className="max-w-[160px] truncate">{chapterName}</span>
           </span>
           <form action={logout}>
             <button className="text-sm text-muted-foreground transition-colors hover:text-foreground">
@@ -109,5 +127,89 @@ export default function Header({ chapterName }: { chapterName: string }) {
         </div>
       </div>
     </header>
+  );
+}
+
+function PeriodSwitcher({
+  periods,
+  activePeriodId,
+}: {
+  periods: PeriodOption[];
+  activePeriodId: number | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const active = periods.find((p) => p.id === activePeriodId) ?? periods[0];
+
+  useEffect(() => {
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, []);
+
+  if (!active) {
+    return (
+      <Link
+        href="/periods"
+        className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-medium text-foreground hover:bg-muted"
+      >
+        <CalendarRange className="h-4 w-4 text-muted-foreground" />
+        Set up a period
+      </Link>
+    );
+  }
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex h-9 items-center gap-2 rounded-full border border-border bg-card px-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+        title="Switch budgeting period"
+      >
+        <CalendarRange className="h-4 w-4 text-muted-foreground" />
+        <span className="max-w-[140px] truncate">{active.name}</span>
+        <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-border bg-popover shadow-xl">
+          <div className="max-h-72 overflow-y-auto py-1">
+            {periods.map((p) => (
+              <form key={p.id} action={setActivePeriod}>
+                <input type="hidden" name="id" value={p.id} />
+                <button
+                  type="submit"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {p.start} → {p.end}
+                    </p>
+                  </div>
+                  {p.id === active.id && (
+                    <Check className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary" />
+                  )}
+                </button>
+              </form>
+            ))}
+          </div>
+          <div className="border-t border-border/60 p-1">
+            <Link
+              href="/periods"
+              onClick={() => setOpen(false)}
+              className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+            >
+              <Plus className="h-4 w-4" />
+              New period / manage
+            </Link>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

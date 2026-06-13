@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb } from "@/lib/db";
+import { getDb, getActivePeriod } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import {
   categorizeEvent,
@@ -9,7 +9,7 @@ import {
   categorizeIncome,
 } from "@/lib/categorize";
 
-const PATHS = ["/dashboard", "/budget", "/scenarios"];
+const PATHS = ["/dashboard", "/budget", "/scenarios", "/periods"];
 const ITEM_TYPES = ["fixed_expense", "planned_event", "other_income"] as const;
 type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -85,13 +85,16 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
   const user = await requireUser();
   const item = parseItemForm(formData);
   if (!item) return;
+  const period = getActivePeriod(user.id);
+  if (!period) return;
   getDb()
     .prepare(
-      `INSERT INTO budget_items (user_id, type, name, amount, actual_amount, date, frequency, category, attendance, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       user.id,
+      period.id,
       item.type,
       item.name,
       item.amount,
@@ -148,17 +151,19 @@ export async function setCategoryCap(formData: FormData): Promise<void> {
   const user = await requireUser();
   const category = String(formData.get("category") ?? "").trim();
   if (!category) return;
+  const period = getActivePeriod(user.id);
+  if (!period) return;
   const cap = parseAmount(formData.get("cap"));
   const db = getDb();
   if (cap > 0) {
     db.prepare(
-      `INSERT INTO category_caps (user_id, category, cap) VALUES (?, ?, ?)
-       ON CONFLICT(user_id, category) DO UPDATE SET cap = excluded.cap`
-    ).run(user.id, category, cap);
+      `INSERT INTO category_caps (user_id, period_id, category, cap) VALUES (?, ?, ?, ?)
+       ON CONFLICT(user_id, period_id, category) DO UPDATE SET cap = excluded.cap`
+    ).run(user.id, period.id, category, cap);
   } else {
     db.prepare(
-      "DELETE FROM category_caps WHERE user_id = ? AND category = ?"
-    ).run(user.id, category);
+      "DELETE FROM category_caps WHERE user_id = ? AND period_id = ? AND category = ?"
+    ).run(user.id, period.id, category);
   }
   revalidateAll();
 }

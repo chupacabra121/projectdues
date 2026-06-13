@@ -1,10 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb, getMembers } from "@/lib/db";
+import { getDb, getActivePeriod, getMembers } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-const PATHS = ["/dashboard", "/budget", "/members", "/scenarios"];
+const PATHS = ["/dashboard", "/budget", "/members", "/scenarios", "/periods"];
 
 function revalidateAll() {
   for (const p of PATHS) revalidatePath(p);
@@ -28,12 +28,15 @@ export async function addMember(formData: FormData): Promise<void> {
   const user = await requireUser();
   const name = cleanContact(formData.get("name"));
   if (!name) return;
+  const period = getActivePeriod(user.id);
+  if (!period) return;
   getDb()
     .prepare(
-      "INSERT INTO members (user_id, name, email, phone, status, amount_paid) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO members (user_id, period_id, name, email, phone, status, amount_paid) VALUES (?, ?, ?, ?, ?, ?, ?)"
     )
     .run(
       user.id,
+      period.id,
       name,
       cleanContact(formData.get("email")),
       cleanContact(formData.get("phone"), 40),
@@ -93,16 +96,18 @@ export async function deleteMember(formData: FormData): Promise<void> {
  */
 export async function syncRosterToBudget(): Promise<void> {
   const user = await requireUser();
-  const members = getMembers(user.id);
+  const period = getActivePeriod(user.id);
+  if (!period) return;
+  const members = getMembers(user.id, period.id);
   if (members.length === 0) return;
   const actives = members.filter((m) => m.status === "active").length;
   const pledges = members.filter((m) => m.status === "pledge").length;
   const collected = members.reduce((sum, m) => sum + m.amount_paid, 0);
   getDb()
     .prepare(
-      `UPDATE settings SET active_members = ?, current_pledges = ?, dues_collected = ?
-       WHERE user_id = ?`
+      `UPDATE periods SET active_members = ?, current_pledges = ?, dues_collected = ?
+       WHERE id = ? AND user_id = ?`
     )
-    .run(actives, pledges, collected, user.id);
+    .run(actives, pledges, collected, period.id, user.id);
   revalidateAll();
 }

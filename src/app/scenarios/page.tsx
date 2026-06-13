@@ -1,19 +1,24 @@
 import Link from "next/link";
 import { requireOnboardedUser } from "@/lib/auth";
-import { getBudgetItems, getSettings } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { getActivePeriod, getBudgetItems } from "@/lib/db";
 import { buildForecast, fmtUSD } from "@/lib/forecast";
 import AppShell from "@/components/AppShell";
 
 export default async function ScenariosPage() {
   const user = await requireOnboardedUser();
-  const settings = getSettings(user.id)!;
-  const items = getBudgetItems(user.id);
-  const forecast = buildForecast(settings, items);
+  const period = getActivePeriod(user.id);
+  if (!period) redirect("/periods");
+  const items = getBudgetItems(user.id, period.id);
+  const forecast = buildForecast(period, items);
 
   return (
-    <AppShell chapterName={user.chapter_name}>
+    <AppShell chapterName={user.chapter_name} userId={user.id}>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-      <h1 className="mb-2 font-display text-3xl text-foreground">Scenarios</h1>
+      <h1 className="mb-2 font-display text-3xl text-foreground">
+        Scenarios
+        <span className="text-muted-foreground"> · {period.name}</span>
+      </h1>
       <p className="mb-8 max-w-2xl text-sm leading-6 text-muted-foreground">
         Recruitment is the biggest swing factor in your budget. These three
         forecasts share your obligations, events, and dues — only the pledge
@@ -112,7 +117,7 @@ export default async function ScenariosPage() {
           <li>
             Each pledge is worth{" "}
             <span className="font-medium text-foreground">
-              {fmtUSD(settings.pledge_dues * settings.collection_rate)}
+              {fmtUSD(period.pledge_dues * period.collection_rate)}
             </span>{" "}
             in expected revenue at your current collection rate.
           </li>

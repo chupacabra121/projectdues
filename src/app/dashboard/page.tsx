@@ -2,7 +2,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, BellRing, Bot, Users, Wallet } from "lucide-react";
 import { requireOnboardedUser } from "@/lib/auth";
-import { BudgetItemRow, getBudgetItems, getCategoryCaps, getMembers, getSettings, SettingsRow } from "@/lib/db";
+import { redirect } from "next/navigation";
+import { BudgetItemRow, getActivePeriod, getBudgetItems, getCategoryCaps, getMembers, PeriodRow } from "@/lib/db";
 import { buildForecast, Forecast, fmtUSD, fmtDate, itemSemesterCost, Insight } from "@/lib/forecast";
 import { buildCashCurve, monthlyFlows } from "@/lib/cashflow";
 import { CashCurveChart, MonthlyFlowChart } from "@/components/Charts";
@@ -25,10 +26,12 @@ function greeting(): string {
 
 export default async function DashboardPage() {
   const user = await requireOnboardedUser();
-  const settings = getSettings(user.id)!;
-  const items = getBudgetItems(user.id);
-  const members = getMembers(user.id);
-  const caps = getCategoryCaps(user.id);
+  const period = getActivePeriod(user.id);
+  if (!period) redirect("/periods");
+  const settings = period;
+  const items = getBudgetItems(user.id, period.id);
+  const members = getMembers(user.id, period.id);
+  const caps = getCategoryCaps(user.id, period.id);
   const forecast = buildForecast(settings, items, caps);
   const curve = buildCashCurve(settings, items);
   const months = monthlyFlows(settings, items);
@@ -68,7 +71,7 @@ export default async function DashboardPage() {
           };
 
   return (
-    <AppShell chapterName={user.chapter_name}>
+    <AppShell chapterName={user.chapter_name} userId={user.id}>
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
         {/* Greeting */}
         <div className="mb-8 flex flex-wrap items-end justify-between gap-3">
@@ -78,8 +81,8 @@ export default async function DashboardPage() {
               <span className="text-primary">{user.chapter_name}</span>
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {fmtDate(settings.semester_start)} – {fmtDate(settings.semester_end)} ·
-              Penny keeps these numbers live.
+              {period.name} · {fmtDate(settings.semester_start)} –{" "}
+              {fmtDate(settings.semester_end)} · Penny keeps these numbers live.
             </p>
           </div>
           <Link
@@ -421,7 +424,7 @@ function DuesBreakdown({
   items,
   forecast,
 }: {
-  settings: SettingsRow;
+  settings: PeriodRow;
   items: BudgetItemRow[];
   forecast: Forecast;
 }) {

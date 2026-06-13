@@ -21,7 +21,7 @@ export default async function AgentTeaserPage({
   const user = await requireOnboardedUser();
 
   return (
-    <AppShell chapterName={user.chapter_name}>
+    <AppShell chapterName={user.chapter_name} userId={user.id}>
       <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
         <Link
           href="/dashboard"

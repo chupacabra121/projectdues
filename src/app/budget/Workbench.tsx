@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { updateBudgetSettings } from "@/app/actions/setup";
 import { setCategoryCap } from "@/app/actions/budget";
-import { BudgetItemRow, SettingsRow } from "@/lib/db";
+import { BudgetItemRow, PeriodRow } from "@/lib/db";
 import {
   buildForecast,
   ForecastSettings,
@@ -41,7 +41,7 @@ export default function Workbench({
   items,
   caps,
 }: {
-  settings: SettingsRow;
+  settings: PeriodRow;
   items: BudgetItemRow[];
   caps: Record<string, number>;
 }) {

@@ -10,6 +10,16 @@ treasurers:
 
 ## How it's organized
 
+**Budgeting periods** — every chapter runs multiple semesters, each with its
+own budget. A period has a name and a calendar (e.g. "Spring 2026", Jan 10 –
+May 15) and owns its own budget items, member roster, allocations, and
+recruitment scenarios. Switch periods from the header dropdown; start a new one
+from the Periods page with one-click carry-over of the roster (pledges promoted
+to actives), fixed obligations (monthly bills re-anchored to the new calendar),
+dues settings, and allocation caps — while dues collected and actual costs
+always reset. Penny only ever reports on the period you're in.
+
+
 Every page shares a two-row header: the main tabs up top (Dashboard,
 Budget, Members, Scenarios) with the **agent team strip right below** — four
 AI-generated teammates with photos; tap one to step into their office.
