@@ -41,11 +41,7 @@ export default async function DashboardPage() {
   const upcoming = items
     .filter((i) => i.date)
     .sort((a, b) => (a.date! < b.date! ? -1 : 1));
-  const unpaid = members.filter(
-    (m) =>
-      m.amount_paid <
-      (m.status === "active" ? settings.active_dues : settings.pledge_dues)
-  ).length;
+  const duesOutstanding = forecast.outstandingDues > 0;
 
   // Penny's single most useful suggestion right now.
   const nextAction =
@@ -56,10 +52,10 @@ export default async function DashboardPage() {
           cta: "Review the budget",
           href: "/budget",
         }
-      : unpaid > 0
+      : duesOutstanding
         ? {
-            title: `${unpaid} member${unpaid === 1 ? " still owes dues" : "s still owe dues"}`,
-            body: `${fmtUSD(forecast.outstandingDues)} in dues is still out. Filter the roster to unpaid members and copy their emails for a reminder.`,
+            title: "Dues are still outstanding",
+            body: `${fmtUSD(forecast.outstandingDues)} in dues is still projected to come in. Open the roster to reach members for a reminder.`,
             cta: "Open member roster",
             href: "/members",
           }

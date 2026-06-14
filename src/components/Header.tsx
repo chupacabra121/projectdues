@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Building2, CalendarRange, Check, ChevronDown, Clock3, Plus } from "lucide-react";
+import { Building2, CalendarRange, Check, ChevronDown, Clock3, Plus, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { setActivePeriod } from "@/app/actions/periods";
 import { LayoutDashboard } from "lucide-react";
@@ -40,6 +40,7 @@ export default function Header({
   const pathname = usePathname();
   const activeAgent = activeAgentFor(pathname);
   const onDashboard = pathname.startsWith("/dashboard");
+  const onMembers = pathname.startsWith("/members");
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl">
@@ -52,7 +53,7 @@ export default function Header({
           Simple<span className="text-primary">Dues</span>
         </Link>
 
-        <nav className="flex flex-1 items-center">
+        <nav className="flex flex-1 items-center gap-1">
           <Link
             href="/dashboard"
             className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
@@ -63,6 +64,17 @@ export default function Header({
           >
             <LayoutDashboard className="h-4 w-4" />
             Dashboard
+          </Link>
+          <Link
+            href="/members"
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+              onMembers
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <Users className="h-4 w-4" />
+            Members
           </Link>
         </nav>
 
