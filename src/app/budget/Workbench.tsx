@@ -15,23 +15,15 @@ import {
 import { AddItemForm, ItemRow } from "./ItemForms";
 import { inputCls } from "@/components/AuthShell";
 
-interface AidRow {
-  name: string;
-  amount: string;
-}
-
 interface MoneyInState {
   duesSchedule: string;
-  fullCount: string;
   fullRate: string;
-  aid: AidRow[];
   pledgeDues: string;
   collectionRate: string;
   conservative: string;
   expected: string;
   optimistic: string;
   startingBalance: string;
-  duesCollected: string;
   reserveTarget: string;
   semesterStart: string;
   semesterEnd: string;
@@ -55,16 +47,13 @@ export default function Workbench({
   const bd = settings.active_dues_breakdown;
   const [s, setS] = useState<MoneyInState>({
     duesSchedule: settings.dues_schedule || "sixweek",
-    fullCount: String(bd ? bd.fullCount : settings.active_members),
     fullRate: String(bd ? bd.fullRate : settings.active_dues),
-    aid: bd ? bd.aid.map((a) => ({ name: a.name, amount: String(a.amount) })) : [],
     pledgeDues: String(settings.pledge_dues),
     collectionRate: String(Math.round(settings.collection_rate * 100)),
     conservative: String(settings.pledges_conservative),
     expected: String(settings.pledges_expected),
     optimistic: String(settings.pledges_optimistic),
     startingBalance: String(settings.starting_balance),
-    duesCollected: String(settings.dues_collected),
     reserveTarget: String(settings.reserve_target),
     semesterStart: settings.semester_start,
     semesterEnd: settings.semester_end,
@@ -74,9 +63,11 @@ export default function Workbench({
   const firstRender = useRef(true);
 
   const live: ForecastSettings = useMemo(() => {
-    const aid = s.aid.map((a) => ({ name: a.name, amount: num(a.amount) }));
+    // Member count + financial aid come from the roster (materialized onto the
+    // period); the Budget tab only edits the set rate, for instant preview.
+    const aid = bd?.aid ?? [];
     const breakdown = {
-      fullCount: int(s.fullCount),
+      fullCount: bd?.fullCount ?? 0,
       fullRate: num(s.fullRate),
       aid,
     };
@@ -91,13 +82,13 @@ export default function Workbench({
       pledge_dues: num(s.pledgeDues),
       collection_rate: Math.min(100, num(s.collectionRate)) / 100,
       starting_balance: num(s.startingBalance),
-      dues_collected: num(s.duesCollected),
+      dues_collected: settings.dues_collected,
       reserve_target: num(s.reserveTarget),
       semester_start: s.semesterStart,
       semester_end: s.semesterEnd,
       dues_schedule: s.duesSchedule,
     };
-  }, [s, settings.current_pledges]);
+  }, [s, settings.current_pledges, settings.dues_collected, bd]);
 
   const forecast = useMemo(
     () => buildForecast(live, items, caps),
@@ -115,16 +106,13 @@ export default function Workbench({
       setSaveState("saving");
       startTransition(async () => {
         await updateBudgetSettings({
-          activeFullCount: live.active_dues_breakdown!.fullCount,
-          activeFullRate: live.active_dues_breakdown!.fullRate,
-          aid: live.active_dues_breakdown!.aid,
+          activeDues: live.active_dues_breakdown!.fullRate,
           pledgeDues: live.pledge_dues,
           collectionRate: live.collection_rate * 100,
           pledgesConservative: live.pledges_conservative,
           pledgesExpected: live.pledges_expected,
           pledgesOptimistic: live.pledges_optimistic,
           startingBalance: live.starting_balance,
-          duesCollected: live.dues_collected,
           reserveTarget: live.reserve_target,
           semesterStart: live.semester_start,
           semesterEnd: live.semester_end,
@@ -139,16 +127,6 @@ export default function Workbench({
 
   const set = (key: keyof MoneyInState) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setS((prev) => ({ ...prev, [key]: e.target.value }));
-
-  const addAid = () =>
-    setS((prev) => ({ ...prev, aid: [...prev.aid, { name: "", amount: "" }] }));
-  const updateAid = (i: number, key: keyof AidRow, val: string) =>
-    setS((prev) => ({
-      ...prev,
-      aid: prev.aid.map((a, idx) => (idx === i ? { ...a, [key]: val } : a)),
-    }));
-  const removeAid = (i: number) =>
-    setS((prev) => ({ ...prev, aid: prev.aid.filter((_, idx) => idx !== i) }));
 
   const obligations = items.filter((i) => i.type === "fixed_expense");
   const events = items.filter((i) => i.type === "planned_event");
@@ -200,14 +178,10 @@ export default function Workbench({
         </p>
         <div className="grid gap-4 lg:grid-cols-2">
           <ActiveDuesGroup
-            fullCount={s.fullCount}
-            onFullCount={set("fullCount")}
+            fullCount={live.active_dues_breakdown!.fullCount}
+            aidCount={live.active_dues_breakdown!.aid.length}
             fullRate={s.fullRate}
             onFullRate={set("fullRate")}
-            aid={s.aid}
-            onAddAid={addAid}
-            onUpdateAid={updateAid}
-            onRemoveAid={removeAid}
             fullSubtotal={fullSubtotal}
             aidSubtotal={aidSubtotal}
           />
@@ -316,9 +290,6 @@ export default function Workbench({
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Money in the bank now" value={s.startingBalance}
               onChange={set("startingBalance")} prefix="$" />
-            <Field label="Dues already collected" value={s.duesCollected}
-              onChange={set("duesCollected")} prefix="$"
-              hint="Updates as you record payments on Members." />
             <Field label="Reserve target" value={s.reserveTarget}
               onChange={set("reserveTarget")} prefix="$"
               hint="Cushion to keep at semester's end." />
@@ -700,35 +671,26 @@ function RevenueGroup({
 }
 
 /**
- * Active members broken into a full-dues majority plus individual financial-aid
- * members who each pay a custom amount. Starts as a simple count × rate; the
- * aid list appears when you carve members out.
+ * Active-dues summary. The member count and financial-aid total are derived
+ * from the roster (materialized onto the period); only the set rate is editable
+ * here. Per-member dues and aid live on the Dues tab.
  */
 function ActiveDuesGroup({
   fullCount,
-  onFullCount,
+  aidCount,
   fullRate,
   onFullRate,
-  aid,
-  onAddAid,
-  onUpdateAid,
-  onRemoveAid,
   fullSubtotal,
   aidSubtotal,
 }: {
-  fullCount: string;
-  onFullCount: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  fullCount: number;
+  aidCount: number;
   fullRate: string;
   onFullRate: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  aid: AidRow[];
-  onAddAid: () => void;
-  onUpdateAid: (i: number, key: keyof AidRow, val: string) => void;
-  onRemoveAid: (i: number) => void;
   fullSubtotal: number;
   aidSubtotal: number;
 }) {
-  const fullN = Math.max(0, Math.round(Number(fullCount) || 0));
-  const totalMembers = fullN + aid.length;
+  const totalMembers = fullCount + aidCount;
 
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
@@ -739,20 +701,17 @@ function ActiveDuesGroup({
         </p>
       </div>
 
-      {/* Full dues — the majority */}
+      {/* Count from the roster × the set rate (editable here and on Dues). */}
       <div className="flex items-start gap-2">
-        <label className="flex-1">
+        <div className="flex-1">
           <span className="mb-1 block text-xs text-muted-foreground">
-            How many{aid.length > 0 ? " (full dues)" : ""}
+            How many{aidCount > 0 ? " (full dues)" : ""}
           </span>
-          <input
-            type="number" min={0}
-            value={fullCount}
-            onChange={onFullCount}
-            className={`${inputCls} text-center font-medium`}
-          />
-          <span className="mt-1 block text-center text-xs text-muted-foreground">members</span>
-        </label>
+          <div className={`${inputCls} text-center font-medium`} aria-readonly>
+            {fullCount}
+          </div>
+          <span className="mt-1 block text-center text-xs text-muted-foreground">from roster</span>
+        </div>
         <span className="pt-7 text-muted-foreground">×</span>
         <label className="flex-1">
           <span className="mb-1 block text-xs text-muted-foreground">Dues each</span>
@@ -769,69 +728,21 @@ function ActiveDuesGroup({
         </label>
       </div>
 
-      {/* Financial aid — individuals with custom amounts */}
-      {aid.length === 0 ? (
-        <button
-          type="button"
-          onClick={onAddAid}
-          className="mt-3 w-full rounded-xl border border-dashed border-border py-2 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
-        >
-          + Add financial-aid members
-        </button>
-      ) : (
-        <div className="mt-4 rounded-xl bg-muted/40 p-3">
-          <div className="mb-2 flex items-center justify-between">
-            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Financial aid · {aid.length}
-            </span>
-            <span className="text-xs font-semibold text-primary">{fmtUSD(aidSubtotal)}</span>
-          </div>
-          <div className="space-y-2">
-            {aid.map((a, i) => (
-              <div key={i} className="flex items-center gap-2">
-                <input
-                  value={a.name}
-                  onChange={(e) => onUpdateAid(i, "name", e.target.value)}
-                  placeholder="Name (optional)"
-                  className="min-w-0 flex-1 rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
-                />
-                <div className="relative w-24 flex-shrink-0">
-                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-                  <input
-                    type="number" min={0} step="0.01"
-                    value={a.amount}
-                    onChange={(e) => onUpdateAid(i, "amount", e.target.value)}
-                    placeholder="0"
-                    aria-label="Financial aid dues amount"
-                    className="w-full rounded-lg border border-input bg-background py-1.5 pl-6 pr-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
-                  />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onRemoveAid(i)}
-                  aria-label="Remove financial-aid member"
-                  className="flex-shrink-0 px-1 text-muted-foreground/50 transition-colors hover:text-destructive"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={onAddAid}
-            className="mt-2 text-xs font-medium text-primary hover:underline"
-          >
-            + Add member
-          </button>
+      {aidCount > 0 && (
+        <div className="mt-3 flex items-center justify-between rounded-xl bg-muted/40 px-3 py-2">
+          <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Financial aid · {aidCount}
+          </span>
+          <span className="text-xs font-semibold text-primary">{fmtUSD(aidSubtotal)}</span>
         </div>
       )}
 
-      {aid.length > 0 && (
-        <p className="mt-3 border-t border-border/60 pt-2 text-center text-xs text-muted-foreground">
-          {totalMembers} active members · {fullN} full dues + {aid.length} on aid
-        </p>
-      )}
+      <Link
+        href="/dues"
+        className="mt-3 flex items-center justify-center gap-1 border-t border-border/60 pt-3 text-xs font-medium text-primary transition-colors hover:underline"
+      >
+        {totalMembers} active members · manage dues &amp; financial aid →
+      </Link>
     </div>
   );
 }

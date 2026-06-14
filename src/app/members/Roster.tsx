@@ -1,69 +1,46 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { BellRing, Trash2 } from "lucide-react";
-import {
-  addMember,
-  updateMember,
-  markMemberPaid,
-  deleteMember,
-  syncRosterToBudget,
-} from "@/app/actions/members";
-import { MemberRow, PeriodRow } from "@/lib/db";
-import { fmtUSD } from "@/lib/forecast";
+import { addMember, updateMember, deleteMember } from "@/app/actions/members";
+import { MemberRow } from "@/lib/db";
+import { MemberStatus, MEMBER_STATUSES } from "@/lib/memberStatus";
 import { inputCls } from "@/components/AuthShell";
 
-type Filter = "all" | "active" | "pledge" | "unpaid";
+type Filter = "all" | MemberStatus;
 
 const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: "all", label: "All" },
-  { key: "active", label: "Actives" },
-  { key: "pledge", label: "Pledges" },
-  { key: "unpaid", label: "Unpaid" },
+  ...MEMBER_STATUSES.map((s) => ({ key: s.value, label: s.plural })),
 ];
 
-const ROW_GRID = "sm:grid-cols-[1.4fr_1.6fr_1.1fr_5.5rem_7rem_6.5rem]";
+const STATUS_BADGE: Record<MemberStatus, string> = {
+  active: "bg-primary/10 text-accent-foreground",
+  pledge: "bg-secondary text-secondary-foreground",
+  alumni: "bg-muted text-foreground",
+  inactive: "bg-muted/60 text-muted-foreground",
+};
 
-export default function Roster({
-  members,
-  settings,
-}: {
-  members: MemberRow[];
-  settings: PeriodRow;
-}) {
+const labelFor = (s: MemberStatus) =>
+  MEMBER_STATUSES.find((x) => x.value === s)?.label ?? s;
+
+const ROW_GRID = "sm:grid-cols-[1.5fr_1.8fr_1.2fr_6rem_3.5rem]";
+
+export default function Roster({ members }: { members: MemberRow[] }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [copied, setCopied] = useState("");
 
-  const duesFor = (m: MemberRow) =>
-    m.status === "active" ? settings.active_dues : settings.pledge_dues;
-  const isUnpaid = (m: MemberRow) => m.amount_paid < duesFor(m);
+  const filtered = useMemo(
+    () =>
+      filter === "all" ? members : members.filter((m) => m.status === filter),
+    [members, filter]
+  );
 
-  const filtered = useMemo(() => {
-    switch (filter) {
-      case "active":
-        return members.filter((m) => m.status === "active");
-      case "pledge":
-        return members.filter((m) => m.status === "pledge");
-      case "unpaid":
-        return members.filter(isUnpaid);
-      default:
-        return members;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members, filter, settings.active_dues, settings.pledge_dues]);
-
-  const actives = members.filter((m) => m.status === "active").length;
-  const pledges = members.filter((m) => m.status === "pledge").length;
-  const totalBilled = members.reduce((s, m) => s + duesFor(m), 0);
-  const totalCollected = members.reduce((s, m) => s + m.amount_paid, 0);
-  const outstanding = Math.max(0, totalBilled - totalCollected);
-  const unpaidCount = members.filter(isUnpaid).length;
-
-  const rosterDiffersFromBudget =
-    members.length > 0 &&
-    (settings.active_members !== actives ||
-      settings.current_pledges !== pledges ||
-      Math.round(settings.dues_collected) !== Math.round(totalCollected));
+  const counts = MEMBER_STATUSES.map((s) => ({
+    ...s,
+    n: members.filter((m) => m.status === s.value).length,
+  }));
 
   async function copy(kind: "emails" | "phones") {
     const values = filtered
@@ -95,36 +72,33 @@ export default function Roster({
     <>
       <div className="mb-6 flex items-baseline justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Member information with contact details and dues status — the
-          foundation for mass email and text reminders.
+          Your member roster — names, contact details, and membership category.
+          The foundation for mass email and text reminders.
         </p>
         <p className="whitespace-nowrap text-sm text-muted-foreground">
-          {actives} actives · {pledges} pledges
+          {members.length} {members.length === 1 ? "member" : "members"}
         </p>
       </div>
 
-      {/* Summary */}
+      {/* Category counts — click a card to filter to it */}
       <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <SummaryCard label="Dues Billed" value={fmtUSD(totalBilled)}
-          sub={`${members.length} members`} />
-        <SummaryCard label="Collected" value={fmtUSD(totalCollected)}
-          sub={totalBilled > 0 ? `${Math.round((totalCollected / totalBilled) * 100)}% of billed` : "—"} tone="good" />
-        <SummaryCard label="Outstanding" value={fmtUSD(outstanding)}
-          sub={`${unpaidCount} member${unpaidCount === 1 ? "" : "s"} owe money`}
-          tone={outstanding > 0 ? "bad" : "good"} />
-        <SummaryCard label="Per-Member Dues" value={`${fmtUSD(settings.active_dues)} / ${fmtUSD(settings.pledge_dues)}`}
-          sub="active / pledge (set on Budget tab)" />
+        {counts.map((c) => (
+          <button
+            key={c.value}
+            onClick={() => setFilter((f) => (f === c.value ? "all" : c.value))}
+            className={`rounded-2xl border p-5 text-left transition-colors ${
+              filter === c.value
+                ? "border-primary/50 bg-primary/5"
+                : "border-border bg-card hover:border-primary/40"
+            }`}
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {c.plural}
+            </p>
+            <p className="mt-1.5 text-2xl font-semibold text-foreground">{c.n}</p>
+          </button>
+        ))}
       </section>
-
-      {/* Sync banner */}
-      {rosterDiffersFromBudget && (
-        <SyncBanner
-          actives={actives}
-          pledges={pledges}
-          collected={totalCollected}
-          settings={settings}
-        />
-      )}
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -157,19 +131,19 @@ export default function Roster({
         >
           Copy phones
         </button>
-        <button
-          disabled
-          title="The Dues Collection Agent will send mass email and SMS reminders — coming soon"
-          className="inline-flex cursor-not-allowed items-center gap-1.5 rounded-full border border-border bg-muted px-3.5 py-1.5 text-sm font-medium text-muted-foreground"
+        <Link
+          href="/agents/dues-collection/email"
+          title="Open Dunn's email composer"
+          className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
           <BellRing className="h-3.5 w-3.5" />
-          Send reminders · Soon
-        </button>
+          Send reminders
+        </Link>
       </div>
       <p className="mb-4 text-xs text-muted-foreground/80">
         Copy buttons follow the current filter — e.g. filter to{" "}
-        <span className="font-medium">Unpaid</span>, then copy emails to paste
-        into a dues-reminder message.
+        <span className="font-medium">Alumni</span>, then copy emails to paste
+        into a newsletter.
       </p>
 
       {/* Roster table */}
@@ -178,20 +152,19 @@ export default function Roster({
           <span>Name</span>
           <span>Email</span>
           <span>Phone</span>
-          <span>Status</span>
-          <span className="text-right">Dues</span>
+          <span>Category</span>
           <span />
         </div>
         {filtered.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground/70">
             {members.length === 0
               ? "No members yet — add them below."
-              : "No members match this filter."}
+              : "No members in this category."}
           </p>
         )}
         <div className="divide-y divide-border/40">
           {filtered.map((m) => (
-            <MemberLine key={m.id} member={m} dues={duesFor(m)} />
+            <MemberLine key={m.id} member={m} />
           ))}
         </div>
         <AddMemberLine />
@@ -200,72 +173,9 @@ export default function Roster({
   );
 }
 
-function SummaryCard({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone?: "good" | "bad";
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p
-        className={`mt-1.5 text-2xl font-semibold ${
-          tone === "good"
-            ? "text-primary"
-            : tone === "bad"
-              ? "text-destructive"
-              : "text-foreground"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
-    </div>
-  );
-}
-
-function SyncBanner({
-  actives,
-  pledges,
-  collected,
-  settings,
-}: {
-  actives: number;
-  pledges: number;
-  collected: number;
-  settings: PeriodRow;
-}) {
-  const [isPending, startTransition] = useTransition();
-  return (
-    <div className="mb-6 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-      <p className="min-w-60 flex-1 text-sm leading-6 text-foreground/80">
-        Your roster ({actives} actives, {pledges} pledges, {fmtUSD(collected)}{" "}
-        collected) doesn&apos;t match the budget ({settings.active_members} actives,{" "}
-        {settings.current_pledges} pledges, {fmtUSD(settings.dues_collected)}{" "}
-        collected).
-      </p>
-      <button
-        disabled={isPending}
-        onClick={() => startTransition(() => syncRosterToBudget())}
-        className="rounded-full bg-foreground px-4 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90 disabled:opacity-50"
-      >
-        {isPending ? "Syncing…" : "Use roster numbers in budget"}
-      </button>
-    </div>
-  );
-}
-
-function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
+function MemberLine({ member }: { member: MemberRow }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const balance = dues - member.amount_paid;
-  const paidUp = balance <= 0;
 
   if (editing) {
     return (
@@ -283,18 +193,12 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
         <input name="email" type="email" defaultValue={member.email} placeholder="email" className={inputCls} />
         <input name="phone" defaultValue={member.phone} placeholder="phone" className={inputCls} />
         <select name="status" defaultValue={member.status} className={inputCls}>
-          <option value="active">Active</option>
-          <option value="pledge">Pledge</option>
+          {MEMBER_STATUSES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
         </select>
-        <div className="relative">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
-          <input
-            name="amount_paid" type="number" min={0} step="0.01"
-            defaultValue={member.amount_paid}
-            title="Amount paid so far"
-            className={`${inputCls} pl-6`}
-          />
-        </div>
         <div className="flex justify-end gap-1.5">
           <button
             type="submit"
@@ -337,42 +241,11 @@ function MemberLine({ member, dues }: { member: MemberRow; dues: number }) {
         {member.phone || <span className="text-muted-foreground/40">—</span>}
       </span>
       <span
-        className={`w-fit rounded-full px-2 py-1 text-center text-xs font-medium ${
-          member.status === "active"
-            ? "bg-primary/10 text-accent-foreground"
-            : "bg-secondary text-secondary-foreground"
-        }`}
+        className={`w-fit rounded-full px-2 py-1 text-center text-xs font-medium ${STATUS_BADGE[member.status]}`}
       >
-        {member.status === "active" ? "Active" : "Pledge"}
+        {labelFor(member.status)}
       </span>
-      <span className="text-right text-sm">
-        {paidUp ? (
-          <span className="font-medium text-primary">Paid ✓</span>
-        ) : (
-          <span
-            className="font-medium text-destructive"
-            title={`${fmtUSD(member.amount_paid)} of ${fmtUSD(dues)} paid`}
-          >
-            owes {fmtUSD(balance)}
-          </span>
-        )}
-      </span>
-      <div className="flex items-center justify-end gap-2">
-        {!paidUp && (
-          <button
-            disabled={isPending}
-            onClick={() => {
-              const fd = new FormData();
-              fd.set("id", String(member.id));
-              fd.set("amount", String(dues));
-              startTransition(() => markMemberPaid(fd));
-            }}
-            className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-xs font-medium text-accent-foreground opacity-0 transition-opacity hover:bg-primary/20 disabled:opacity-50 group-hover:opacity-100"
-            title="Mark full dues as paid"
-          >
-            Mark paid
-          </button>
-        )}
+      <div className="flex items-center justify-end">
         <button
           disabled={isPending}
           onClick={() => {
@@ -409,16 +282,18 @@ function AddMemberLine() {
       <input name="email" type="email" placeholder="email (optional)" className={inputCls} />
       <input name="phone" placeholder="phone (optional)" className={inputCls} />
       <select name="status" defaultValue="active" className={inputCls}>
-        <option value="active">Active</option>
-        <option value="pledge">Pledge</option>
+        {MEMBER_STATUSES.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
       </select>
-      <span />
       <button
         type="submit"
         disabled={isPending}
         className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {isPending ? "Adding…" : "Add"}
+        {isPending ? "…" : "Add"}
       </button>
     </form>
   );

@@ -38,31 +38,31 @@ export const AGENTS: AgentProfile[] = [
     description:
       "Penny watches money in and money out, keeps the semester forecast live, and answers the only question that matters: can we afford what we're planning?",
     focus: ["Semester plan", "Plan vs actual", "Member dues", "Recruitment scenarios"],
-    subtabs: ["Budget", "Plan vs Actual", "Members", "Scenarios"],
+    subtabs: ["Budget", "Dues", "Plan vs Actual", "Scenarios"],
     navTabs: [
       { href: "/budget", label: "Budget" },
+      { href: "/dues", label: "Dues" },
       { href: "/actuals", label: "Plan vs Actual" },
-      { href: "/members", label: "Members" },
       { href: "/scenarios", label: "Scenarios" },
     ],
   },
   {
     slug: "dues-collection",
-    href: "/agents/dues-collection",
+    href: "/agents/dues-collection/email",
     name: "Dunn",
     role: "Dues Collection",
-    status: "soon",
+    status: "active",
     image: "/agents/dunn.jpg",
     tagline: "Politely relentless.",
     description:
-      "Dunn will send dues reminders by email and text, escalate gently when payments slip, and report what's been collected — built on the member roster Penny already keeps.",
+      "Dunn sends dues reminders by email and text, escalates gently when payments slip, and reports what's been collected — built on the member roster Penny already keeps.",
     focus: ["Email reminders", "SMS reminders", "Escalation ladder", "Collections report"],
-    subtabs: ["Reminders", "Escalations", "Collections"],
-    today: {
-      text: "Until Dunn arrives: filter the roster to unpaid members and copy their emails or phone numbers in one click.",
-      href: "/members",
-      label: "Open the roster",
-    },
+    subtabs: ["Email", "SMS", "Collections"],
+    navTabs: [
+      { href: "/agents/dues-collection/email", label: "Email" },
+      { href: "/agents/dues-collection/sms", label: "SMS" },
+      { href: "/agents/dues-collection/collections", label: "Collections" },
+    ],
   },
   {
     slug: "recruitment",

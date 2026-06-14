@@ -2,6 +2,12 @@ import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
 import { ActiveDuesBreakdown } from "./forecast";
+import { MemberStatus } from "./memberStatus";
+import {
+  DuesPlan,
+  DEFAULT_DUES_PLANS,
+  memberEffectiveDues,
+} from "./memberDues";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -61,8 +67,10 @@ function createDb(): Database.Database {
       name TEXT NOT NULL,
       email TEXT NOT NULL DEFAULT '',
       phone TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge')),
-      amount_paid REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive')),
+      aid_plan INTEGER,
+      aid_amount REAL,
+      dues_paid INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
@@ -94,17 +102,23 @@ function createDb(): Database.Database {
       reserve_target REAL NOT NULL DEFAULT 0,
       dues_schedule TEXT NOT NULL DEFAULT 'sixweek',
       active_dues_breakdown TEXT,
+      dues_plans TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_periods_user ON periods(user_id);
   `);
   migrateBudgetItemTypes(db);
+  migrateMemberStatuses(db);
   addColumnIfMissing(db, "budget_items", "actual_amount", "REAL");
   addColumnIfMissing(db, "settings", "dues_schedule", "TEXT NOT NULL DEFAULT 'sixweek'");
   addColumnIfMissing(db, "settings", "active_period_id", "INTEGER");
   addColumnIfMissing(db, "budget_items", "period_id", "INTEGER");
   addColumnIfMissing(db, "members", "period_id", "INTEGER");
+  addColumnIfMissing(db, "members", "aid_plan", "INTEGER");
+  addColumnIfMissing(db, "members", "aid_amount", "REAL");
+  addColumnIfMissing(db, "members", "dues_paid", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "periods", "active_dues_breakdown", "TEXT");
+  addColumnIfMissing(db, "periods", "dues_plans", "TEXT");
   migrateToPeriods(db);
   return db;
 }
@@ -130,11 +144,27 @@ export function parseActiveDuesBreakdown(
   }
 }
 
-/** Hydrate a raw periods row: parse the breakdown JSON into a typed field. */
+/** Parse the stored financial-aid plans JSON, falling back to the defaults. */
+export function parseDuesPlans(raw: unknown): DuesPlan[] {
+  if (typeof raw !== "string" || !raw) return DEFAULT_DUES_PLANS;
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p) || p.length === 0) return DEFAULT_DUES_PLANS;
+    return p.slice(0, 4).map((d: { name?: unknown; amount?: unknown }) => ({
+      name: String(d?.name ?? "").slice(0, 40) || "Plan",
+      amount: Math.max(0, Number(d?.amount) || 0),
+    }));
+  } catch {
+    return DEFAULT_DUES_PLANS;
+  }
+}
+
+/** Hydrate a raw periods row: parse the breakdown + plans JSON into typed fields. */
 function hydratePeriod(row: Record<string, unknown>): PeriodRow {
   return {
     ...(row as unknown as PeriodRow),
     active_dues_breakdown: parseActiveDuesBreakdown(row.active_dues_breakdown),
+    dues_plans: parseDuesPlans(row.dues_plans),
   };
 }
 
@@ -295,6 +325,44 @@ function migrateBudgetItemTypes(db: Database.Database) {
   `);
 }
 
+/** Members used to be active/pledge only and carried an amount_paid column.
+ * Dues now live entirely on the budget, so rebuild the table to widen the
+ * status set (alumni/inactive) and drop amount_paid. SQLite can't alter a
+ * CHECK constraint or drop a column in place on older versions, so recreate. */
+function migrateMemberStatuses(db: Database.Database) {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'")
+    .get() as { sql: string } | undefined;
+  if (!row) return;
+  const migrated =
+    row.sql.includes("'alumni'") && !row.sql.includes("amount_paid");
+  if (migrated) return;
+  const hasPeriod = (
+    db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
+  ).some((c) => c.name === "period_id");
+  db.exec(`
+    BEGIN;
+    CREATE TABLE members_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive')),
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      period_id INTEGER
+    );
+    INSERT INTO members_new (id, user_id, name, email, phone, status, created_at, period_id)
+      SELECT id, user_id, name, email, phone, status, created_at, ${
+        hasPeriod ? "period_id" : "NULL"
+      } FROM members;
+    DROP TABLE members;
+    ALTER TABLE members_new RENAME TO members;
+    CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
+    COMMIT;
+  `);
+}
+
 export function getDb(): Database.Database {
   if (!global.__simpleduesDb) global.__simpleduesDb = createDb();
   return global.__simpleduesDb;
@@ -335,6 +403,8 @@ export interface PeriodRow {
   dues_schedule: string;
   /** Parsed by the getters; null = flat active_members × active_dues. */
   active_dues_breakdown: ActiveDuesBreakdown | null;
+  /** Financial-aid plans (name + preset amount); parsed by the getters. */
+  dues_plans: DuesPlan[];
 }
 
 export interface BudgetItemRow {
@@ -374,8 +444,13 @@ export interface MemberRow {
   name: string;
   email: string;
   phone: string;
-  status: "active" | "pledge";
-  amount_paid: number;
+  status: MemberStatus;
+  /** Financial-aid plan index into the period's dues_plans, or null = set rate. */
+  aid_plan: number | null;
+  /** Individual override of the plan's preset amount, or null = use the preset. */
+  aid_amount: number | null;
+  /** 1 once the member has paid their dues (the Dues-tab checkbox). */
+  dues_paid: number;
 }
 
 export function getMembers(userId: number, periodId: number): MemberRow[] {
@@ -384,6 +459,71 @@ export function getMembers(userId: number, periodId: number): MemberRow[] {
       "SELECT * FROM members WHERE user_id = ? AND period_id = ? ORDER BY status ASC, name COLLATE NOCASE ASC"
     )
     .all(userId, periodId) as MemberRow[];
+}
+
+/**
+ * Roster → budget: materialize the period's derived dues fields so the forecast
+ * (which reads period fields) reflects the roster and the per-member paid
+ * checkboxes. Sets:
+ *  - active_members + active_dues_breakdown (full-dues tier + individually
+ *    priced members: anyone on a plan or with an override).
+ *  - dues_collected = Σ effective dues of every member (active OR pledge) marked
+ *    paid — the single source of "collected to date".
+ * Call after any change to the roster, a member's dues/plan/amount, the paid
+ * checkboxes, the set rates, or the plan amounts.
+ */
+export function recomputeDerivedDues(userId: number, periodId: number): void {
+  const db = getDb();
+  const period = db
+    .prepare(
+      "SELECT active_dues, pledge_dues, dues_plans FROM periods WHERE id = ? AND user_id = ?"
+    )
+    .get(periodId, userId) as
+    | { active_dues: number; pledge_dues: number; dues_plans: unknown }
+    | undefined;
+  if (!period) return;
+  const plans = parseDuesPlans(period.dues_plans);
+  const activeRate = Math.max(0, Number(period.active_dues) || 0);
+  const pledgeRate = Math.max(0, Number(period.pledge_dues) || 0);
+  const members = db
+    .prepare(
+      "SELECT name, status, aid_plan, aid_amount, dues_paid FROM members WHERE user_id = ? AND period_id = ? AND status IN ('active','pledge')"
+    )
+    .all(userId, periodId) as {
+    name: string;
+    status: string;
+    aid_plan: number | null;
+    aid_amount: number | null;
+    dues_paid: number;
+  }[];
+
+  const duesOf = (m: { status: string; aid_plan: number | null; aid_amount: number | null }) =>
+    memberEffectiveDues(
+      m.aid_plan,
+      m.aid_amount,
+      plans,
+      m.status === "active" ? activeRate : pledgeRate
+    );
+
+  // Active-dues breakdown: anyone with a plan or an override is priced
+  // individually; the rest pay the flat rate (fullCount × fullRate).
+  const actives = members.filter((m) => m.status === "active");
+  const aid = actives
+    .filter((m) => m.aid_plan != null || m.aid_amount != null)
+    .map((m) => ({
+      name: m.name,
+      amount: memberEffectiveDues(m.aid_plan, m.aid_amount, plans, activeRate),
+    }));
+  const breakdown = { fullCount: actives.length - aid.length, fullRate: activeRate, aid };
+
+  // Collected = the dues of everyone checked off (actives and pledges alike).
+  const collected = members
+    .filter((m) => m.dues_paid === 1)
+    .reduce((sum, m) => sum + duesOf(m), 0);
+
+  db.prepare(
+    "UPDATE periods SET active_members = ?, active_dues_breakdown = ?, dues_collected = ? WHERE id = ? AND user_id = ?"
+  ).run(actives.length, JSON.stringify(breakdown), collected, periodId, userId);
 }
 
 export function getPeriods(userId: number): PeriodRow[] {

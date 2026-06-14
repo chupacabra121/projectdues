@@ -2,7 +2,13 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { getDb, defaultSemester, getActivePeriod, periodNameFor } from "@/lib/db";
+import {
+  getDb,
+  defaultSemester,
+  getActivePeriod,
+  periodNameFor,
+  recomputeDerivedDues,
+} from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
 export interface OnboardingPayload {
@@ -107,23 +113,15 @@ export async function completeOnboarding(
   redirect("/dashboard");
 }
 
-export interface AidMemberInput {
-  name: string;
-  amount: number;
-}
-
 export interface BudgetSettingsPayload {
-  /** Active dues are a full-dues tier plus individual financial-aid members. */
-  activeFullCount: number;
-  activeFullRate: number;
-  aid: AidMemberInput[];
+  /** The set active-dues rate; per-member dues/aid are derived from the roster. */
+  activeDues: number;
   pledgeDues: number;
   collectionRate: number; // percent, 0-100
   pledgesConservative: number;
   pledgesExpected: number;
   pledgesOptimistic: number;
   startingBalance: number;
-  duesCollected: number;
   reserveTarget: number;
   semesterStart: string; // YYYY-MM-DD
   semesterEnd: string;
@@ -145,40 +143,26 @@ export async function updateBudgetSettings(
   if (!period) return;
   const sem = defaultSemester();
 
-  // The active-dues breakdown is the source of truth; derive the flat
-  // active_members / active_dues from it so legacy consumers stay correct.
-  const fullCount = clampInt(payload.activeFullCount);
-  const fullRate = clampMoney(payload.activeFullRate);
-  const aid = (Array.isArray(payload.aid) ? payload.aid : [])
-    .slice(0, 200)
-    .map((a) => ({
-      name: String(a?.name ?? "").trim().slice(0, 80),
-      amount: clampMoney(a?.amount),
-    }));
-  const breakdown = { fullCount, fullRate, aid };
-  const totalActiveMembers = fullCount + aid.length;
-
+  // active_members, the aid breakdown, and dues_collected are all derived
+  // (recomputeDerivedDues below); the Budget tab only sets the rates/scenarios.
   getDb()
     .prepare(
       `UPDATE periods SET
-        active_members = ?, active_dues = ?, active_dues_breakdown = ?,
+        active_dues = ?,
         pledge_dues = ?, collection_rate = ?,
         pledges_conservative = ?, pledges_expected = ?, pledges_optimistic = ?,
-        starting_balance = ?, dues_collected = ?, reserve_target = ?,
+        starting_balance = ?, reserve_target = ?,
         semester_start = ?, semester_end = ?, dues_schedule = ?
       WHERE id = ? AND user_id = ?`
     )
     .run(
-      totalActiveMembers,
-      fullRate,
-      JSON.stringify(breakdown),
+      clampMoney(payload.activeDues),
       clampMoney(payload.pledgeDues),
       Math.min(100, Math.max(0, Number(payload.collectionRate) || 0)) / 100,
       clampInt(payload.pledgesConservative),
       clampInt(payload.pledgesExpected),
       clampInt(payload.pledgesOptimistic),
       clampMoney(payload.startingBalance),
-      clampMoney(payload.duesCollected),
       clampMoney(payload.reserveTarget),
       parseIsoDate(payload.semesterStart, sem.start),
       parseIsoDate(payload.semesterEnd, sem.end),
@@ -188,9 +172,12 @@ export async function updateBudgetSettings(
       period.id,
       user.id
     );
+  // Re-derive active_members + breakdown + dues_collected from the roster.
+  recomputeDerivedDues(user.id, period.id);
   revalidatePath("/dashboard");
   revalidatePath("/budget");
   revalidatePath("/actuals");
+  revalidatePath("/dues");
   revalidatePath("/scenarios");
   revalidatePath("/periods");
 }

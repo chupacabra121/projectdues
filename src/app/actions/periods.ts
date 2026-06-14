@@ -8,6 +8,7 @@ import {
   getPeriods,
   getSettings,
   periodNameFor,
+  recomputeDerivedDues,
 } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
@@ -112,7 +113,7 @@ export async function createPeriod(formData: FormData): Promise<void> {
         .prepare("SELECT name, email, phone, status FROM members WHERE user_id = ? AND period_id = ?")
         .all(user.id, from.id) as { name: string; email: string; phone: string; status: string }[];
       const insert = db.prepare(
-        "INSERT INTO members (user_id, period_id, name, email, phone, status, amount_paid) VALUES (?, ?, ?, ?, ?, ?, 0)"
+        "INSERT INTO members (user_id, period_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?)"
       );
       for (const m of members) {
         const status = promotePledges ? "active" : m.status;
@@ -177,7 +178,10 @@ export async function createPeriod(formData: FormData): Promise<void> {
     return pid;
   });
 
-  create();
+  const newPid = create();
+  // A carried roster comes over as full-dues (aid isn't copied), so re-derive
+  // the active-dues breakdown from it rather than trusting the copied one.
+  if (carryRoster) recomputeDerivedDues(user.id, newPid);
   revalidateAll();
   redirect("/dashboard");
 }

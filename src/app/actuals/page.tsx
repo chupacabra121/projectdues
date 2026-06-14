@@ -1,6 +1,6 @@
 import { requireOnboardedUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import { getActivePeriod, getBudgetItems } from "@/lib/db";
+import { getActivePeriod, getBudgetItems, getMembers } from "@/lib/db";
 import AppShell from "@/components/AppShell";
 import Actuals from "./Actuals";
 
@@ -9,6 +9,7 @@ export default async function ActualsPage() {
   const period = getActivePeriod(user.id);
   if (!period) redirect("/periods");
   const items = getBudgetItems(user.id, period.id);
+  const members = getMembers(user.id, period.id);
 
   return (
     <AppShell chapterName={user.chapter_name} userId={user.id}>
@@ -26,7 +27,7 @@ export default async function ActualsPage() {
           .
         </p>
         {/* Remount on period change so inline actual inputs reset cleanly. */}
-        <Actuals key={period.id} period={period} items={items} />
+        <Actuals key={period.id} period={period} items={items} members={members} />
       </div>
     </AppShell>
   );
