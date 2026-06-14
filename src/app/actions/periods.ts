@@ -110,7 +110,7 @@ export async function createPeriod(formData: FormData): Promise<void> {
 
     if (from && carryRoster) {
       const members = db
-        .prepare("SELECT name, email, phone, status FROM members WHERE user_id = ? AND period_id = ?")
+        .prepare("SELECT name, email, phone, status FROM members WHERE user_id = ? AND period_id = ? AND status != 'trash'")
         .all(user.id, from.id) as { name: string; email: string; phone: string; status: string }[];
       const insert = db.prepare(
         "INSERT INTO members (user_id, period_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?)"

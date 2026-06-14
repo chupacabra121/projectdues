@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Building2, CalendarRange, Check, ChevronDown, Clock3, Plus, Users } from "lucide-react";
+import { Building2, CalendarRange, Check, ChevronDown, Clock3, Moon, Plus, Sun, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { setActivePeriod } from "@/app/actions/periods";
 import { LayoutDashboard } from "lucide-react";
@@ -84,6 +84,7 @@ export default function Header({
             <Building2 className="h-4 w-4 text-muted-foreground" />
             <span className="max-w-[160px] truncate">{chapterName}</span>
           </span>
+          <ThemeToggle />
           <form action={logout}>
             <button className="text-sm text-muted-foreground transition-colors hover:text-foreground">
               Sign out
@@ -107,10 +108,14 @@ export default function Header({
                     : `${agent.name} — ${agent.role}, coming soon`
                 }
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3.5 transition-colors ${
-                  active ? "bg-muted ring-1 ring-border" : "hover:bg-muted/60"
+                  active ? "bg-muted ring-1 ring-primary/40" : "hover:bg-muted/60"
                 }`}
               >
-                <span className="relative h-9 w-9 overflow-hidden rounded-full border border-border">
+                <span
+                  className={`relative h-9 w-9 overflow-hidden rounded-full border ${
+                    active ? "border-primary/70" : "border-border"
+                  }`}
+                >
                   <Image
                     src={agent.image}
                     alt={`${agent.name}, ${agent.role} agent`}
@@ -123,9 +128,13 @@ export default function Header({
                   <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
                     {agent.name}
                     {agent.status === "active" ? (
-                      <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_var(--primary)] ${
+                          active ? "pulse-node" : ""
+                        }`}
+                      />
                     ) : (
-                      <Clock3 className="h-3 w-3 text-muted-foreground/60" />
+                      <Clock3 className="h-3 w-3 text-muted-foreground/80" />
                     )}
                   </span>
                   <span className="block text-[11px] text-muted-foreground">
@@ -154,7 +163,7 @@ export default function Header({
                   href={tab.href}
                   className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
                     active
-                      ? "bg-foreground text-background"
+                      ? "bg-primary/15 text-accent-foreground ring-1 ring-primary/30"
                       : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
@@ -166,6 +175,32 @@ export default function Header({
         </div>
       )}
     </header>
+  );
+}
+
+/** Sun/moon pill that flips the dual-theme: swaps .dark/.light on <html> and
+ *  remembers the choice in a cookie (read server-side in layout.tsx). Which icon
+ *  shows is driven purely by the html class via CSS — no state, no SSR flash. */
+function ThemeToggle() {
+  function toggle() {
+    const el = document.documentElement;
+    const next = !el.classList.contains("light");
+    el.classList.toggle("light", next);
+    el.classList.toggle("dark", !next);
+    document.cookie = `sd-theme=${next ? "light" : "dark"}; path=/; max-age=31536000; samesite=lax`;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label="Toggle dark and light theme"
+      title="Toggle theme"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+    >
+      <Sun className="theme-icon-dark h-4 w-4" />
+      <Moon className="theme-icon-light h-4 w-4" />
+    </button>
   );
 }
 
@@ -231,7 +266,7 @@ function PeriodSwitcher({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-border bg-popover shadow-xl">
+        <div className="glass-elevated absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl">
           <div className="max-h-72 overflow-y-auto py-1">
             {periods.map((p) => (
               <button

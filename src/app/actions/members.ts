@@ -65,6 +65,25 @@ export async function updateMember(formData: FormData): Promise<void> {
   revalidateAll();
 }
 
+/**
+ * Change just a member's category — used by drag-and-drop and by the
+ * trash/restore actions. "Deleting" a member moves them to the `trash`
+ * category rather than erasing the row, so it can always be undone.
+ */
+export async function setMemberStatus(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = Number(formData.get("id"));
+  if (!id) return;
+  const status = parseStatus(formData.get("status"));
+  const period = getActivePeriod(user.id);
+  getDb()
+    .prepare("UPDATE members SET status = ? WHERE id = ? AND user_id = ?")
+    .run(status, id, user.id);
+  if (period) recomputeDerivedDues(user.id, period.id);
+  revalidateAll();
+}
+
+/** Permanently erase a member (used to empty the Trash bin). */
 export async function deleteMember(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));

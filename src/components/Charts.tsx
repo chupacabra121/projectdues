@@ -44,6 +44,20 @@ export function CashCurveChart({
       role="img"
       aria-label="Projected cash balance across the semester"
     >
+      <defs>
+        <linearGradient id="cashArea" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+        </linearGradient>
+        <filter id="cashGlow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2.5" result="blur" />
+          <feMerge>
+            <feMergeNode in="blur" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+
       {/* horizontal gridlines */}
       {gridValues.map((v) => (
         <g key={v}>
@@ -54,6 +68,7 @@ export function CashCurveChart({
           <text
             x={PAD.l - 8} y={y(v) + 3.5}
             textAnchor="end" fontSize="10.5" fill="var(--muted-foreground)"
+            fontFamily="var(--font-mono)"
           >
             {fmtUSDk(v)}
           </text>
@@ -69,6 +84,7 @@ export function CashCurveChart({
       <text
         x={PAD.l - 8} y={y(0) + 3.5}
         textAnchor="end" fontSize="10.5" fill="var(--muted-foreground)"
+        fontFamily="var(--font-mono)"
       >
         $0
       </text>
@@ -83,6 +99,7 @@ export function CashCurveChart({
           <text
             x={CURVE_W - PAD.r} y={y(reserveTarget) - 5}
             textAnchor="end" fontSize="10" fill="var(--muted-foreground)"
+            fontFamily="var(--font-mono)"
           >
             reserve {fmtUSDk(reserveTarget)}
           </text>
@@ -100,8 +117,15 @@ export function CashCurveChart({
       ))}
 
       {/* the curve */}
-      <path d={area} fill="var(--primary)" opacity="0.12" />
-      <path d={line} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinejoin="round" />
+      <path d={area} fill="url(#cashArea)" />
+      <path
+        d={line}
+        fill="none"
+        stroke="var(--primary)"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+        filter="url(#cashGlow)"
+      />
 
       {/* low point */}
       <circle
@@ -113,6 +137,7 @@ export function CashCurveChart({
         x={Math.min(x(curve.min.day) + 8, CURVE_W - 150)}
         y={Math.max(y(curve.min.balance) - 8, 14)}
         fontSize="11" fontWeight="600"
+        fontFamily="var(--font-mono)"
         fill={dipsNegative ? "var(--destructive)" : "var(--foreground)"}
       >
         low {fmtUSDk(curve.min.balance)} · {fmtDate(curve.min.date)}
@@ -125,7 +150,8 @@ export function CashCurveChart({
       />
       <text
         x={x(curve.end.day) - 8} y={y(curve.end.balance) - 10}
-        textAnchor="end" fontSize="11" fontWeight="600" fill="var(--foreground)"
+        textAnchor="end" fontSize="11" fontWeight="600"
+        fontFamily="var(--font-mono)" fill="var(--foreground)"
       >
         end {fmtUSDk(curve.end.balance)}
       </text>
@@ -157,7 +183,7 @@ export function MonthlyFlowChart({ months }: { months: MonthFlow[] }) {
       <g fontSize="10.5" fill="var(--muted-foreground)">
         <circle cx={BARS_W - 104} cy={12} r="4" fill="var(--primary)" />
         <text x={BARS_W - 96} y={15.5}>In</text>
-        <circle cx={BARS_W - 64} cy={12} r="4" fill="var(--color-amber-500)" />
+        <circle cx={BARS_W - 64} cy={12} r="4" fill="var(--warning)" />
         <text x={BARS_W - 56} y={15.5}>Out</text>
       </g>
 
@@ -181,7 +207,7 @@ export function MonthlyFlowChart({ months }: { months: MonthFlow[] }) {
             <rect
               x={cx + 2} y={base - h(m.spend)}
               width={barW} height={h(m.spend)}
-              rx="3" fill="var(--color-amber-500)"
+              rx="3" fill="var(--warning)"
             />
             <text
               x={cx} y={BARS_H - 8}

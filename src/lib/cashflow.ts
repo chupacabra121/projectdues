@@ -6,7 +6,13 @@
  *  - undated items hit on day one (conservative for expenses)
  *  - monthly items recur on their day-of-month across the semester
  */
-import { ForecastItem, ForecastSettings, effectiveAmount, revenueFor } from "./forecast";
+import {
+  ForecastItem,
+  ForecastSettings,
+  effectiveAmount,
+  itemSemesterCost,
+  revenueFor,
+} from "./forecast";
 
 export interface CashPoint {
   day: number;
@@ -100,7 +106,11 @@ function dailyFlows(
 
   for (const item of items) {
     const bucket = item.type === "other_income" ? inflows : outflows;
-    const amount = effectiveAmount(item);
+    // Per-member costs are a single per-semester total (rate × headcount).
+    const amount =
+      item.type === "variable_expense"
+        ? itemSemesterCost(item, s)
+        : effectiveAmount(item);
     if (item.frequency === "monthly") {
       const dayOfMonth = item.date ? Number(item.date.slice(8, 10)) : 1;
       const cursor = new Date(

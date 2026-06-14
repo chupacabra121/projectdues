@@ -19,10 +19,16 @@ import {
   fmtDate,
   itemSemesterCost,
   occurrences,
+  costBasisLabel,
+  variableHeadcount,
 } from "@/lib/forecast";
 import { inputCls, labelCls } from "@/components/AuthShell";
 
-export type ItemType = "fixed_expense" | "planned_event" | "other_income";
+export type ItemType =
+  | "fixed_expense"
+  | "planned_event"
+  | "other_income"
+  | "variable_expense";
 
 const TYPE_META: Record<
   ItemType,
@@ -32,6 +38,12 @@ const TYPE_META: Record<
     noun: "Obligation",
     namePlaceholder: "National Fees",
     amountPlaceholder: "4500",
+    categories: EXPENSE_CATEGORIES,
+  },
+  variable_expense: {
+    noun: "Per-member cost",
+    namePlaceholder: "Insurance",
+    amountPlaceholder: "50",
     categories: EXPENSE_CATEGORIES,
   },
   planned_event: {
@@ -51,6 +63,7 @@ const TYPE_META: Record<
 function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
   const meta = TYPE_META[type];
   const isEvent = type === "planned_event";
+  const isVariable = type === "variable_expense";
   return (
     <>
       <div>
@@ -66,7 +79,9 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={labelCls}>{isEvent ? "Expected Cost" : "Amount"}</label>
+          <label className={labelCls}>
+            {isEvent ? "Expected Cost" : isVariable ? "Cost per person" : "Amount"}
+          </label>
           <div className="relative">
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
@@ -76,13 +91,24 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
             />
           </div>
         </div>
-        <div>
-          <label className={labelCls}>Date</label>
-          <input name="date" type="date" defaultValue={item?.date ?? ""} className={inputCls} />
-        </div>
+        {isVariable ? (
+          <div>
+            <label className={labelCls}>Per</label>
+            <select name="cost_basis" className={inputCls} defaultValue={item?.cost_basis ?? "active"}>
+              <option value="active">Active member</option>
+              <option value="pledge">Pledge</option>
+              <option value="member">Everyone</option>
+            </select>
+          </div>
+        ) : (
+          <div>
+            <label className={labelCls}>Date</label>
+            <input name="date" type="date" defaultValue={item?.date ?? ""} className={inputCls} />
+          </div>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-3">
-        {!isEvent && (
+        {!isEvent && !isVariable && (
           <div>
             <label className={labelCls}>Frequency</label>
             <select name="frequency" className={inputCls} defaultValue={item?.frequency ?? "one_time"}>
@@ -225,6 +251,10 @@ export function ItemRow({
     item.type === "planned_event" && item.attendance
       ? item.amount / item.attendance
       : null;
+  const isVariable = item.type === "variable_expense";
+  const head = isVariable
+    ? variableHeadcount(item.cost_basis, settings, settings.pledges_expected)
+    : 0;
 
   return (
     <div className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
@@ -240,21 +270,27 @@ export function ItemRow({
           </span>
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {fmtDate(item.date)}
-          {item.frequency === "monthly" && ` · monthly ×${n}`}
-          {item.frequency === "yearly" && " · yearly"}
-          {item.attendance ? ` · ~${item.attendance} attending` : ""}
-          {costPerPerson ? ` (${fmtUSD(costPerPerson)}/person)` : ""}
+          {isVariable ? (
+            `${fmtUSD(item.amount)} per ${costBasisLabel(item.cost_basis)} · ×${head}`
+          ) : (
+            <>
+              {fmtDate(item.date)}
+              {item.frequency === "monthly" && ` · monthly ×${n}`}
+              {item.frequency === "yearly" && " · yearly"}
+              {item.attendance ? ` · ~${item.attendance} attending` : ""}
+              {costPerPerson ? ` (${fmtUSD(costPerPerson)}/person)` : ""}
+            </>
+          )}
           {item.notes ? ` · ${item.notes}` : ""}
         </p>
       </button>
       <div className="flex shrink-0 items-center gap-3">
         <div className="text-right">
-          <p className="text-sm font-semibold text-foreground">
+          <p className="font-money text-sm font-semibold text-foreground">
             {fmtUSD(itemSemesterCost(item, settings))}
           </p>
           {n > 1 && (
-            <p className="text-xs text-muted-foreground">{fmtUSD(item.amount)}/mo</p>
+            <p className="font-money text-xs text-muted-foreground">{fmtUSD(item.amount)}/mo</p>
           )}
         </div>
         <button

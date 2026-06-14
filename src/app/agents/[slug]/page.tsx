@@ -97,16 +97,16 @@ export default async function AgentTeaserPage({
             </section>
 
             {agent.today && (
-              <section className="rounded-[2rem] border border-border bg-foreground p-6 text-background sm:p-7">
-                <p className="text-xs font-semibold uppercase tracking-wide text-background/60">
+              <section className="glass-hero rounded-[2rem] p-6 text-foreground sm:p-7">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   In the meantime
                 </p>
-                <p className="mt-3 text-sm leading-6 text-background/80">
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">
                   {agent.today.text}
                 </p>
                 <Link
                   href={agent.today.href}
-                  className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-background px-4 text-sm font-semibold text-foreground transition-opacity hover:opacity-90"
+                  className="mt-5 inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                 >
                   {agent.today.label}
                   <ArrowRight className="h-4 w-4" />

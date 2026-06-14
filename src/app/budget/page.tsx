@@ -24,8 +24,8 @@ export default async function BudgetPage() {
           <span className="text-muted-foreground"> · {period.name}</span>
         </h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Plan the whole semester up front — income, obligations, events, and
-          allocations. Track what things really cost on{" "}
+          Plan the semester top to bottom — money in, obligations, then events.
+          Track what things really cost on{" "}
           <a href="/actuals" className="font-medium text-primary hover:underline">
             Plan vs Actual
           </a>

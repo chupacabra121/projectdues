@@ -10,16 +10,14 @@ import {
   ForecastSettings,
   fmtUSD,
   itemSemesterCost,
-  revenueFor,
 } from "@/lib/forecast";
 import { AddItemForm, ItemRow } from "./ItemForms";
 import { inputCls } from "@/components/AuthShell";
 
 interface MoneyInState {
-  duesSchedule: string;
   fullRate: string;
   pledgeDues: string;
-  collectionRate: string;
+  nonPayers: string;
   conservative: string;
   expected: string;
   optimistic: string;
@@ -35,6 +33,12 @@ const num = (s: string) => {
 };
 const int = (s: string) => Math.round(num(s));
 
+/** Green = money you actually have to spend (positive); red = a hole. */
+type Tone = "good" | "bad" | "neutral";
+const toneText = (t: Tone) =>
+  t === "good" ? "text-money-up" : t === "bad" ? "text-money-down" : "text-foreground";
+const signTone = (n: number): Tone => (n >= 0 ? "good" : "bad");
+
 export default function Workbench({
   settings,
   items,
@@ -46,10 +50,17 @@ export default function Workbench({
 }) {
   const bd = settings.active_dues_breakdown;
   const [s, setS] = useState<MoneyInState>({
-    duesSchedule: settings.dues_schedule || "sixweek",
     fullRate: String(bd ? bd.fullRate : settings.active_dues),
     pledgeDues: String(settings.pledge_dues),
-    collectionRate: String(Math.round(settings.collection_rate * 100)),
+    nonPayers: String(
+      Math.max(
+        0,
+        Math.round(
+          (1 - settings.collection_rate) *
+            (settings.active_members + settings.pledges_expected)
+        )
+      )
+    ),
     conservative: String(settings.pledges_conservative),
     expected: String(settings.pledges_expected),
     optimistic: String(settings.pledges_optimistic),
@@ -71,8 +82,13 @@ export default function Workbench({
       fullRate: num(s.fullRate),
       aid,
     };
+    const activeCount = breakdown.fullCount + aid.length;
+    // Collection rate is driven by an estimated non-payer count: each expected
+    // non-payer is valued at the average dues, i.e. rate = 1 − N / billed.
+    const billed = activeCount + int(s.expected);
+    const nonPayers = Math.max(0, Math.min(billed, int(s.nonPayers)));
     return {
-      active_members: breakdown.fullCount + aid.length,
+      active_members: activeCount,
       current_pledges: settings.current_pledges,
       pledges_conservative: int(s.conservative),
       pledges_expected: int(s.expected),
@@ -80,15 +96,15 @@ export default function Workbench({
       active_dues: breakdown.fullRate,
       active_dues_breakdown: breakdown,
       pledge_dues: num(s.pledgeDues),
-      collection_rate: Math.min(100, num(s.collectionRate)) / 100,
+      collection_rate: billed > 0 ? Math.max(0, 1 - nonPayers / billed) : 1,
       starting_balance: num(s.startingBalance),
       dues_collected: settings.dues_collected,
       reserve_target: num(s.reserveTarget),
       semester_start: s.semesterStart,
       semester_end: s.semesterEnd,
-      dues_schedule: s.duesSchedule,
+      dues_schedule: settings.dues_schedule,
     };
-  }, [s, settings.current_pledges, settings.dues_collected, bd]);
+  }, [s, settings.current_pledges, settings.dues_collected, settings.dues_schedule, bd]);
 
   const forecast = useMemo(
     () => buildForecast(live, items, caps),
@@ -116,7 +132,6 @@ export default function Workbench({
           reserveTarget: live.reserve_target,
           semesterStart: live.semester_start,
           semesterEnd: live.semester_end,
-          duesSchedule: s.duesSchedule,
         });
         setSaveState("saved");
       });
@@ -129,53 +144,62 @@ export default function Workbench({
     setS((prev) => ({ ...prev, [key]: e.target.value }));
 
   const obligations = items.filter((i) => i.type === "fixed_expense");
+  const variables = items.filter((i) => i.type === "variable_expense");
   const events = items.filter((i) => i.type === "planned_event");
   const income = items.filter((i) => i.type === "other_income");
 
   const aidSubtotal = live.active_dues_breakdown!.aid.reduce((sum, a) => sum + a.amount, 0);
   const fullSubtotal = live.active_dues_breakdown!.fullCount * live.active_dues_breakdown!.fullRate;
-  const activesSubtotal = fullSubtotal + aidSubtotal;
   const pledgesSubtotal = live.pledges_expected * live.pledge_dues;
-  const haircut = (activesSubtotal + pledgesSubtotal) * (1 - live.collection_rate);
+  const haircut = (fullSubtotal + aidSubtotal + pledgesSubtotal) * (1 - live.collection_rate);
+  const billedMembers = live.active_members + live.pledges_expected;
+  const collectedPct = Math.round(live.collection_rate * 100);
+
+  // ── The waterfall: money in − obligations = to work with − events = left ──
+  const moneyIn = forecast.totalIncome;
+  const inBank = live.starting_balance;
+  const obligationsTotal = forecast.fixedObligations + forecast.variableObligations;
+  const toWorkWith = inBank + moneyIn - obligationsTotal;
+  const eventsTotal = forecast.plannedEvents;
+  const left = forecast.remainingBalance; // toWorkWith − events
+  const reserve = live.reserve_target;
 
   return (
     <>
-      <div className="mb-6 flex items-baseline justify-between gap-3">
+      <div className="mb-4 flex items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          Changes save automatically and update the forecast as you type.
+          Each step flows into the next — saves as you type.
         </p>
         <SaveIndicator state={saveState} />
       </div>
 
-      {/* Summary strip */}
-      <section className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <SummaryCard label="Total Income" value={fmtUSD(forecast.totalIncome)}
-          sub={forecast.otherIncome > 0 ? `incl. ${fmtUSD(forecast.otherIncome)} other income` : "dues, expected pledge class"} />
-        <SummaryCard label="Fixed Obligations" value={fmtUSD(forecast.fixedObligations)}
-          sub={`${obligations.length} item${obligations.length === 1 ? "" : "s"}`} />
-        <SummaryCard label="Planned Events" value={fmtUSD(forecast.plannedEvents)}
-          sub={`${events.length} item${events.length === 1 ? "" : "s"}`} />
-        <SummaryCard label="Projected Remaining" value={fmtUSD(forecast.remainingBalance)}
-          sub={forecast.remainingBalance >= 0 ? "surplus" : "deficit"}
-          tone={forecast.remainingBalance >= 0 ? "good" : "bad"} />
+      {/* Waterfall ribbon — the whole plan on one line */}
+      <Ribbon
+        inBank={inBank}
+        moneyIn={moneyIn}
+        obligations={obligationsTotal}
+        toWorkWith={toWorkWith}
+        events={eventsTotal}
+        left={left}
+      />
+
+      {/* Starting point — set-once context that seeds the waterfall */}
+      <section className="glass glass-lift mb-5 rounded-2xl p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="In the bank now" value={s.startingBalance}
+            onChange={set("startingBalance")} prefix="$" />
+          <Field label="Reserve to keep" value={s.reserveTarget}
+            onChange={set("reserveTarget")} prefix="$" />
+          <Field label="Semester start" value={s.semesterStart}
+            onChange={set("semesterStart")} type="date" />
+          <Field label="Semester end" value={s.semesterEnd}
+            onChange={set("semesterEnd")} type="date" />
+        </div>
       </section>
 
-      {/* Money In */}
-      <section id="money-in" className="mb-6 rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
-        <div className="mb-1 flex items-baseline justify-between gap-3">
-          <h2 className="font-semibold text-foreground">Money In</h2>
-          <span className="text-lg font-semibold text-primary">
-            {fmtUSD(forecast.totalIncome)}
-          </span>
-        </div>
-        <p className="mb-6 text-sm text-muted-foreground">
-          Who&apos;s paying dues this semester, plus any other income.
-        </p>
-
-        {/* Dues — each member group keeps its headcount next to its own dues */}
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Dues
-        </p>
+      {/* ── STEP 1 · MONEY IN ─────────────────────────────────────────── */}
+      <Step n={1} title="Money In" subtitle="Dues you expect to collect, plus other income"
+        amount={fmtUSD(moneyIn)} tone="neutral">
         <div className="grid gap-4 lg:grid-cols-2">
           <ActiveDuesGroup
             fullCount={live.active_dues_breakdown!.fullCount}
@@ -194,202 +218,343 @@ export default function Workbench({
             onDues={set("pledgeDues")}
             perNoun="pledge"
             subtotal={pledgesSubtotal}
-            highlight
           />
         </div>
 
-        {/* Collection rate → projected dues */}
-        <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-            <div className="flex items-center gap-2.5">
-              <span className="text-sm font-medium text-foreground">Collection rate</span>
-              <div className="relative w-[4.5rem]">
-                <input
-                  type="number" min={0} max={100}
-                  value={s.collectionRate}
-                  onChange={set("collectionRate")}
-                  className={`${inputCls} pr-6 text-center font-semibold`}
-                />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
-              </div>
-            </div>
-            <input
-              type="range" min={0} max={100}
-              value={Math.min(100, int(s.collectionRate))}
-              onChange={set("collectionRate")}
-              aria-label="Collection rate"
-              className="h-2 min-w-[160px] flex-1 cursor-pointer accent-[var(--primary)]"
-            />
-            <p className="text-xs text-muted-foreground">
-              Most chapters collect 90–97%.
-              {haircut > 0 && (
-                <>
-                  {" · "}
-                  <span className="font-medium text-destructive">−{fmtUSD(haircut)}</span>{" "}
-                  uncollected
-                </>
-              )}
-            </p>
-          </div>
-          <div className="mt-3 flex items-baseline justify-between border-t border-border/60 pt-3">
-            <span className="text-sm font-medium text-foreground">Projected dues revenue</span>
-            <span className="text-lg font-semibold text-primary">
-              {fmtUSD(forecast.projectedRevenue)}
-            </span>
-          </div>
+        {/* Recruitment range — low/high that power the outlook in step 5 */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border bg-muted/30 px-4 py-2.5 text-xs">
+          <span className="font-medium text-foreground">Recruitment range</span>
+          <label className="flex items-center gap-1.5 text-muted-foreground">
+            Low
+            <input type="number" min={0} value={s.conservative} onChange={set("conservative")}
+              aria-label="Conservative pledge count"
+              className="w-14 rounded-lg border border-input bg-background px-2 py-1 text-center text-sm font-medium text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40" />
+          </label>
+          <label className="flex items-center gap-1.5 text-muted-foreground">
+            High
+            <input type="number" min={0} value={s.optimistic} onChange={set("optimistic")}
+              aria-label="Optimistic pledge count"
+              className="w-14 rounded-lg border border-input bg-background px-2 py-1 text-center text-sm font-medium text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40" />
+          </label>
+          <span className="text-muted-foreground">used for the outlook in step 4</span>
         </div>
 
-        {/* Recruitment outlook — the range that powers the scenarios below */}
-        <div className="mt-6">
-          <p className="mb-1 text-sm font-medium text-foreground">Recruitment outlook</p>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Your budget assumes {int(s.expected)} new pledge{int(s.expected) === 1 ? "" : "s"}.
-            Set a low and high to stress-test the scenarios at the bottom of the page.
+        {/* How many actually pay */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-muted/30 px-4 py-2.5">
+          <label className="flex items-center gap-2.5">
+            <span className="text-sm font-medium text-foreground">Expect won&apos;t pay</span>
+            <input
+              type="number" min={0} max={billedMembers}
+              value={s.nonPayers}
+              onChange={set("nonPayers")}
+              aria-label="Members expected not to pay"
+              className={`${inputCls} w-[4.5rem] text-center font-semibold`}
+            />
+            <span className="whitespace-nowrap text-sm text-muted-foreground">
+              of {billedMembers}
+            </span>
+          </label>
+          <p className="text-xs text-muted-foreground">
+            ≈ {collectedPct}% collected · most chapters land 90–97%
+            {haircut > 0 && (
+              <>
+                {" · "}
+                <span className="font-medium text-destructive">−{fmtUSD(haircut)}</span> uncollected
+              </>
+            )}
           </p>
-          <div className="grid grid-cols-3 gap-3">
-            <RangeStat label="Conservative" value={s.conservative}
-              onChange={set("conservative")} revenue={revenueFor(live, int(s.conservative))} />
-            <RangeStat label="Expected" value={s.expected}
-              revenue={revenueFor(live, int(s.expected))} budget />
-            <RangeStat label="Optimistic" value={s.optimistic}
-              onChange={set("optimistic")} revenue={revenueFor(live, int(s.optimistic))} />
-          </div>
         </div>
 
         {/* Other income */}
-        <div className="mt-6">
-          <p className="mb-1 text-sm font-medium text-foreground">Other income</p>
-          <p className="mb-3 text-xs text-muted-foreground">
-            Fundraisers, donations, university allocations.
+        <div className="mt-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Other income · fundraisers, donations, allocations
           </p>
+          {income.length > 0 && (
+            <div className="mb-2 space-y-2">
+              {income.map((item) => (
+                <ItemRow key={item.id} item={item} settings={live} />
+              ))}
+            </div>
+          )}
+          <AddItemForm type="other_income" />
+        </div>
+      </Step>
+
+      {/* ── STEP 2 · OBLIGATIONS ──────────────────────────────────────── */}
+      <Step n={2} title="Obligations" subtitle="The bills you must pay before anything else"
+        amount={`−${fmtUSD(obligationsTotal)}`} tone="neutral">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <ItemList
+            label="Fixed · flat bills"
+            total={forecast.fixedObligations}
+            items={obligations}
+            settings={live}
+            type="fixed_expense"
+          />
+          <ItemList
+            label="Variable · scale with headcount"
+            total={forecast.variableObligations}
+            items={variables}
+            settings={live}
+            type="variable_expense"
+          />
+        </div>
+      </Step>
+
+      {/* ── THE MILESTONE · money to work with ────────────────────────── */}
+      <div
+        data-deficit={toWorkWith < 0}
+        className="glass-hero transition-theme my-6 flex items-center justify-between gap-4 rounded-2xl p-6"
+      >
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Money to work with
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            What&apos;s left for events after the bank, your income, and the must-pay bills.
+          </p>
+        </div>
+        <p
+          className={`font-money-display glow breathe transition-theme shrink-0 text-5xl font-semibold sm:text-6xl ${toneText(
+            signTone(toWorkWith)
+          )}`}
+        >
+          {fmtUSD(toWorkWith)}
+        </p>
+      </div>
+
+      {/* ── STEP 3 · PLAN EVENTS ──────────────────────────────────────── */}
+      <Step n={3} title="Plan Events" subtitle="Spend the working budget — stay under your caps"
+        amount={`−${fmtUSD(eventsTotal)}`} tone="neutral">
+        <EventsMeter planned={eventsTotal} budget={toWorkWith} />
+        {events.length > 0 && (
           <div className="mb-3 space-y-2">
-            {income.map((item) => (
+            {events.map((item) => (
               <ItemRow key={item.id} item={item} settings={live} />
             ))}
           </div>
-          <AddItemForm type="other_income" />
-        </div>
+        )}
+        <AddItemForm type="planned_event" />
+        <Allocations items={items} settings={live} caps={caps} />
+      </Step>
 
-        {/* Total money in */}
-        <div className="mt-6 flex items-baseline justify-between rounded-2xl bg-primary/5 px-4 py-3">
-          <span className="text-sm font-medium text-foreground">Total money in</span>
-          <span className="text-sm text-muted-foreground">
-            {fmtUSD(forecast.projectedRevenue)} dues
-            {forecast.otherIncome > 0 && ` + ${fmtUSD(forecast.otherIncome)} other`} ={" "}
-            <span className="text-lg font-semibold text-primary">
-              {fmtUSD(forecast.totalIncome)}
-            </span>
-          </span>
-        </div>
-
-        {/* Starting position & calendar — set-once context */}
-        <div className="mt-6 border-t border-border/60 pt-6">
-          <p className="mb-3 text-sm font-medium text-foreground">
-            Starting position &amp; calendar
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Money in the bank now" value={s.startingBalance}
-              onChange={set("startingBalance")} prefix="$" />
-            <Field label="Reserve target" value={s.reserveTarget}
-              onChange={set("reserveTarget")} prefix="$"
-              hint="Cushion to keep at semester's end." />
-            <Field label="Semester start" value={s.semesterStart}
-              onChange={set("semesterStart")} type="date" />
-            <Field label="Semester end" value={s.semesterEnd}
-              onChange={set("semesterEnd")} type="date" />
-            <div>
-              <label className="mb-1 block text-sm font-medium text-foreground/80">
-                Dues arrive
-              </label>
-              <select
-                value={s.duesSchedule}
-                onChange={(e) => setS((prev) => ({ ...prev, duesSchedule: e.target.value }))}
-                className={inputCls}
-              >
-                <option value="sixweek">Evenly over first 6 weeks</option>
-                <option value="upfront">All at semester start</option>
-                <option value="monthly">Monthly installments</option>
-                <option value="thirds">⅓ deposit + 2 installments</option>
-              </select>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Drives the cash curve.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Money Out */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <ItemColumn
-          title="Fixed Obligations"
-          subtitle="Things we must pay"
-          total={forecast.fixedObligations}
-          items={obligations}
-          settings={live}
-          type="fixed_expense"
-          accent="text-amber-600"
-        />
-        <ItemColumn
-          title="Planned Events"
-          subtitle="Things we want to do"
-          total={forecast.plannedEvents}
-          items={events}
-          settings={live}
-          type="planned_event"
-          accent="text-foreground"
-        />
-      </div>
-
-      <Allocations items={items} settings={live} caps={caps} />
-
-      {/* Recruitment scenarios — the bottom line, once every input above is set */}
-      <section className="mt-6 rounded-[1.5rem] border border-border bg-card p-6">
-        <div className="mb-1 flex items-baseline justify-between gap-3">
-          <h2 className="font-semibold text-foreground">Recruitment Scenarios</h2>
-          <Link
-            href="/scenarios"
-            className="text-sm font-medium text-primary hover:underline"
-          >
+      {/* ── STEP 4 · MONEY LEFT ───────────────────────────────────────── */}
+      <Step
+        n={4}
+        title="Money Left"
+        subtitle={`${fmtUSD(toWorkWith)} to work with − ${fmtUSD(eventsTotal)} events`}
+        amount={fmtUSD(left)}
+        tone={signTone(left)}
+        action={
+          <Link href="/scenarios" className="shrink-0 text-sm font-medium text-accent-foreground hover:underline">
             Full breakdown →
           </Link>
-        </div>
-        <p className="mb-5 text-sm text-muted-foreground">
-          Projected end-of-semester balance by pledge class size — the bottom
-          line once everything above is filled in.
-        </p>
-        <div className="grid gap-4 sm:grid-cols-3">
-          {forecast.scenarios.map((sc) => {
-            const positive = sc.remainingBalance >= 0;
-            const isExpected = sc.label === "Expected";
-            return (
+        }
+      >
+        {reserve > 0 && (
+          <p className={`text-sm ${left >= reserve ? "text-muted-foreground" : "text-destructive"}`}>
+            {left >= reserve
+              ? `Keeps your ${fmtUSD(reserve)} reserve with ${fmtUSD(left - reserve)} to spare.`
+              : `Falls ${fmtUSD(reserve - left)} short of your ${fmtUSD(reserve)} reserve target.`}
+          </p>
+        )}
+        <div className="mt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            If recruitment lands at…
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {forecast.scenarios.map((sc) => (
               <div
                 key={sc.label}
-                className={`rounded-2xl border p-4 ${
-                  isExpected
-                    ? "border-primary/40 bg-primary/5"
-                    : "border-border bg-muted/30"
+                className={`rounded-xl border px-3 py-2.5 text-center ${
+                  sc.label === "Expected" ? "border-border bg-muted/40" : "border-border bg-background"
                 }`}
               >
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   {sc.label}
                 </p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {sc.pledgeCount} pledges
-                </p>
-                <p
-                  className={`mt-2 text-xl font-semibold ${
-                    positive ? "text-primary" : "text-destructive"
-                  }`}
-                >
+                <p className="text-[11px] text-muted-foreground">{sc.pledgeCount} pledges</p>
+                <p className={`font-money mt-0.5 text-sm font-semibold ${toneText(signTone(sc.remainingBalance))}`}>
                   {fmtUSD(sc.remainingBalance)}
                 </p>
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
-      </section>
+      </Step>
     </>
+  );
+}
+
+/** The whole plan as one ledger line: in + income − bills = budget − events = left. */
+function Ribbon({
+  inBank,
+  moneyIn,
+  obligations,
+  toWorkWith,
+  events,
+  left,
+}: {
+  inBank: number;
+  moneyIn: number;
+  obligations: number;
+  toWorkWith: number;
+  events: number;
+  left: number;
+}) {
+  return (
+    <div className="mb-5 overflow-x-auto">
+      <div className="glass ribbon-underline relative flex min-w-max items-stretch gap-0.5 rounded-2xl px-2 py-2 sm:gap-1 sm:px-3">
+        <RibbonStat label="In the bank" value={inBank} />
+        <Op>+</Op>
+        <RibbonStat label="Money in" value={moneyIn} />
+        <Op>−</Op>
+        <RibbonStat label="Obligations" value={obligations} />
+        <Op>=</Op>
+        <RibbonStat label="To work with" value={toWorkWith} tone={signTone(toWorkWith)} strong />
+        <Op>−</Op>
+        <RibbonStat label="Events" value={events} />
+        <Op>=</Op>
+        <RibbonStat label="Left" value={left} tone={signTone(left)} strong />
+      </div>
+    </div>
+  );
+}
+
+function RibbonStat({
+  label,
+  value,
+  tone = "neutral",
+  strong,
+}: {
+  label: string;
+  value: number;
+  tone?: Tone;
+  strong?: boolean;
+}) {
+  return (
+    <div className={`flex flex-col justify-center rounded-xl px-2.5 py-1 sm:px-3 ${strong ? "bg-muted/60" : ""}`}>
+      <span className="whitespace-nowrap text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      <span
+        className={`font-money text-sm font-semibold ${toneText(tone)} ${
+          strong ? "glow sm:text-base" : ""
+        }`}
+      >
+        {fmtUSD(value)}
+      </span>
+    </div>
+  );
+}
+
+function Op({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex items-center px-0.5 text-base text-muted-foreground/50 sm:px-1">
+      {children}
+    </span>
+  );
+}
+
+/** A numbered waterfall step with a right-aligned running total. */
+function Step({
+  n,
+  title,
+  subtitle,
+  amount,
+  tone = "neutral",
+  action,
+  children,
+}: {
+  n: number;
+  title: string;
+  subtitle?: string;
+  amount?: string;
+  tone?: Tone;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="glass glass-lift step-spine relative mb-5 overflow-hidden rounded-2xl p-5">
+      <header className="mb-4 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-accent-foreground ring-1 ring-primary/25">
+            {n}
+          </span>
+          <div>
+            <h2 className="font-semibold leading-tight text-foreground">{title}</h2>
+            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {amount != null && (
+            <span className={`font-money text-lg font-semibold ${toneText(tone)}`}>{amount}</span>
+          )}
+          {action}
+        </div>
+      </header>
+      {children}
+    </section>
+  );
+}
+
+/** A bare list of budget items with a label + subtotal — no heavy card chrome. */
+function ItemList({
+  label,
+  total,
+  items,
+  settings,
+  type,
+}: {
+  label: string;
+  total: number;
+  items: BudgetItemRow[];
+  settings: ForecastSettings;
+  type: "fixed_expense" | "variable_expense" | "planned_event";
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+        <span className="font-money text-sm font-semibold text-foreground">{fmtUSD(total)}</span>
+      </div>
+      <div className="mb-2 space-y-2">
+        {items.length === 0 && (
+          <p className="py-2 text-center text-sm text-muted-foreground">Nothing here yet.</p>
+        )}
+        {items.map((item) => (
+          <ItemRow key={item.id} item={item} settings={settings} />
+        ))}
+      </div>
+      <AddItemForm type={type} />
+    </div>
+  );
+}
+
+/** Events planned vs the working budget — a meter that turns red when over. */
+function EventsMeter({ planned, budget }: { planned: number; budget: number }) {
+  const over = budget > 0 ? planned > budget : planned > 0;
+  const pct = budget > 0 ? Math.min(100, (planned / budget) * 100) : planned > 0 ? 100 : 0;
+  const remaining = budget - planned;
+  return (
+    <div className="mb-4">
+      <div className="mb-1.5 flex items-baseline justify-between text-sm">
+        <span className="text-muted-foreground">
+          <span className="font-money">{fmtUSD(planned)}</span> planned
+        </span>
+        <span className={over ? "font-semibold text-money-down" : "text-muted-foreground"}>
+          <span className="font-money">{over ? fmtUSD(-remaining) : fmtUSD(remaining)}</span>{" "}
+          {over ? "over budget" : "still free"}
+        </span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-muted">
+        <div
+          className={`h-full rounded-full ${over ? "bg-destructive" : "bg-primary"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -418,11 +583,9 @@ function Allocations({
   if (categories.length === 0) return null;
 
   return (
-    <section className="mt-6 rounded-[1.5rem] border border-border bg-card p-6">
-      <h2 className="font-semibold text-foreground">Allocations</h2>
-      <p className="mb-5 mt-1 text-sm text-muted-foreground">
-        Give each category a spending cap — like handing every chair their
-        budget. Penny flags any category that plans past its cap.
+    <div className="mt-5 border-t border-border/60 pt-4">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Category caps · keep each committee inside its budget
       </p>
       <div className="grid gap-x-8 gap-y-4 lg:grid-cols-2">
         {categories.map((cat) => (
@@ -434,7 +597,7 @@ function Allocations({
           />
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -468,7 +631,7 @@ function AllocationRow({
           {category}
         </span>
         <span className="flex items-center gap-2 text-sm">
-          <span className={over ? "font-semibold text-destructive" : "text-muted-foreground"}>
+          <span className={`font-money ${over ? "font-semibold text-money-down" : "text-muted-foreground"}`}>
             {fmtUSD(planned)}
           </span>
           <span className="text-muted-foreground">of</span>
@@ -482,7 +645,7 @@ function AllocationRow({
               onChange={(e) => setValue(e.target.value)}
               onBlur={save}
               disabled={isPending}
-              className="w-24 rounded-lg border border-input bg-background py-1 pl-5 pr-2 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:opacity-50"
+              className="w-24 rounded-lg border border-input bg-background py-1 pl-5 pr-2 text-sm text-foreground placeholder:text-muted-foreground/80 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:opacity-50"
             />
           </span>
         </span>
@@ -498,8 +661,8 @@ function AllocationRow({
         )}
       </div>
       {over && (
-        <p className="mt-1 text-xs font-medium text-destructive">
-          {fmtUSD(planned - capNum)} over allocation
+        <p className="mt-1 text-xs font-medium text-money-down">
+          <span className="font-money">{fmtUSD(planned - capNum)}</span> over allocation
         </p>
       )}
     </div>
@@ -512,40 +675,10 @@ function SaveIndicator({ state }: { state: "idle" | "dirty" | "saving" | "saved"
     state === "saved" ? "✓ Saved" : state === "saving" ? "Saving…" : "Unsaved changes";
   return (
     <span
-      className={`whitespace-nowrap text-sm ${state === "saved" ? "text-primary" : "text-muted-foreground"}`}
+      className={`whitespace-nowrap text-sm ${state === "saved" ? "text-money-up" : "text-muted-foreground"}`}
     >
       {text}
     </span>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub: string;
-  tone?: "good" | "bad";
-}) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-      <p
-        className={`mt-1.5 text-2xl font-semibold ${
-          tone === "good"
-            ? "text-primary"
-            : tone === "bad"
-              ? "text-destructive"
-              : "text-foreground"
-        }`}
-      >
-        {value}
-      </p>
-      <p className="mt-1 text-xs text-muted-foreground">{sub}</p>
-    </div>
   );
 }
 
@@ -556,7 +689,6 @@ function Field({
   prefix,
   suffix,
   hint,
-  highlight,
   type = "number",
   max,
 }: {
@@ -566,13 +698,12 @@ function Field({
   prefix?: string;
   suffix?: string;
   hint?: string;
-  highlight?: boolean;
   type?: string;
   max?: number;
 }) {
   return (
     <div>
-      <label className="mb-1 block text-sm font-medium text-foreground/80">{label}</label>
+      <label className="mb-1 block text-xs font-medium text-muted-foreground">{label}</label>
       <div className="relative">
         {prefix && (
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -585,9 +716,7 @@ function Field({
           max={max}
           value={value}
           onChange={onChange}
-          className={`${inputCls} ${prefix ? "pl-7" : ""} ${suffix ? "pr-8" : ""} ${
-            highlight ? "border-primary/50 ring-1 ring-primary/20" : ""
-          }`}
+          className={`${inputCls} ${prefix ? "pl-7" : ""} ${suffix ? "pr-8" : ""}`}
         />
         {suffix && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
@@ -602,8 +731,7 @@ function Field({
 
 /**
  * One revenue line — a headcount paired with its own per-head dues and a live
- * subtotal, so "23 members × $650 = $14,950" reads as one thought instead of
- * scattering the count and the rate across a grid.
+ * subtotal, so "23 members × $650 = $14,950" reads as one thought.
  */
 function RevenueGroup({
   title,
@@ -614,7 +742,6 @@ function RevenueGroup({
   onDues,
   perNoun,
   subtotal,
-  highlight,
 }: {
   title: string;
   countValue: string;
@@ -624,17 +751,12 @@ function RevenueGroup({
   onDues: (e: React.ChangeEvent<HTMLInputElement>) => void;
   perNoun: string;
   subtotal: number;
-  highlight?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-2xl border p-4 ${
-        highlight ? "border-primary/30 bg-primary/5" : "border-border bg-background"
-      }`}
-    >
+    <div className="rounded-2xl border border-border bg-background p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="text-base font-semibold text-primary">{fmtUSD(subtotal)}</p>
+        <p className="font-money text-base font-semibold text-foreground">{fmtUSD(subtotal)}</p>
       </div>
       <div className="flex items-start gap-2">
         <label className="flex-1">
@@ -696,7 +818,7 @@ function ActiveDuesGroup({
     <div className="rounded-2xl border border-border bg-background p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold text-foreground">Active members</p>
-        <p className="text-base font-semibold text-primary">
+        <p className="font-money text-base font-semibold text-foreground">
           {fmtUSD(fullSubtotal + aidSubtotal)}
         </p>
       </div>
@@ -733,105 +855,16 @@ function ActiveDuesGroup({
           <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Financial aid · {aidCount}
           </span>
-          <span className="text-xs font-semibold text-primary">{fmtUSD(aidSubtotal)}</span>
+          <span className="font-money text-xs font-semibold text-foreground">{fmtUSD(aidSubtotal)}</span>
         </div>
       )}
 
       <Link
         href="/dues"
-        className="mt-3 flex items-center justify-center gap-1 border-t border-border/60 pt-3 text-xs font-medium text-primary transition-colors hover:underline"
+        className="mt-3 flex items-center justify-center gap-1 border-t border-border/60 pt-3 text-xs font-medium text-accent-foreground transition-colors hover:underline"
       >
-        {totalMembers} active members · manage dues &amp; financial aid →
+        {`${totalMembers} active members · manage dues & financial aid →`}
       </Link>
     </div>
-  );
-}
-
-/**
- * A single pledge-class scenario in the recruitment outlook. Conservative and
- * Optimistic are editable; Expected is the budget anchor (set in the dues
- * group above) and shown read-only.
- */
-function RangeStat({
-  label,
-  value,
-  onChange,
-  revenue,
-  budget,
-}: {
-  label: string;
-  value: string;
-  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  revenue: number;
-  budget?: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border p-3 ${
-        budget ? "border-primary/40 bg-primary/5" : "border-border bg-background"
-      }`}
-    >
-      <p className="text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      {onChange ? (
-        <input
-          type="number" min={0}
-          value={value}
-          onChange={onChange}
-          aria-label={`${label} pledge count`}
-          className="mt-1.5 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-center text-lg font-semibold text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
-        />
-      ) : (
-        <p className="mt-1.5 py-1.5 text-center text-lg font-semibold text-foreground">
-          {value || "0"}
-        </p>
-      )}
-      <p className="mt-1 whitespace-nowrap text-center text-xs text-muted-foreground">
-        → {fmtUSD(revenue)}
-      </p>
-      {budget && (
-        <p className="mt-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-primary">
-          Your budget
-        </p>
-      )}
-    </div>
-  );
-}
-
-function ItemColumn({
-  title,
-  subtitle,
-  total,
-  items,
-  settings,
-  type,
-  accent,
-}: {
-  title: string;
-  subtitle: string;
-  total: number;
-  items: BudgetItemRow[];
-  settings: ForecastSettings;
-  type: "fixed_expense" | "planned_event";
-  accent: string;
-}) {
-  return (
-    <section className="rounded-[1.5rem] border border-border bg-card p-6">
-      <div className="mb-1 flex items-baseline justify-between">
-        <h2 className="font-semibold text-foreground">{title}</h2>
-        <span className={`text-lg font-semibold ${accent}`}>{fmtUSD(total)}</span>
-      </div>
-      <p className="mb-5 text-sm text-muted-foreground">{subtitle}</p>
-      <div className="mb-4 space-y-2">
-        {items.length === 0 && (
-          <p className="py-3 text-center text-sm text-muted-foreground/70">Nothing here yet.</p>
-        )}
-        {items.map((item) => (
-          <ItemRow key={item.id} item={item} settings={settings} />
-        ))}
-      </div>
-      <AddItemForm type={type} />
-    </section>
   );
 }

@@ -48,7 +48,7 @@ export default async function PeriodsPage() {
         </p>
 
         {/* Existing periods */}
-        <section className="mb-8 overflow-hidden rounded-[1.5rem] border border-border bg-card">
+        <section className="glass mb-8 overflow-hidden rounded-[1.5rem]">
           {periods.map((p, i) => {
             const isActive = p.id === active?.id;
             const c = counts.get(p.id)!;
@@ -69,7 +69,7 @@ export default async function PeriodsPage() {
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {fmtDate(p.semester_start)} – {fmtDate(p.semester_end)} ·{" "}
                     {c.members} members · {c.items} budget items ·{" "}
-                    {fmtUSD(revenueOf(p))} projected dues
+                    <span className="font-money">{fmtUSD(revenueOf(p))}</span> projected dues
                   </p>
                 </div>
                 <PeriodActions
@@ -84,7 +84,7 @@ export default async function PeriodsPage() {
         </section>
 
         {/* New period */}
-        <section className="rounded-[1.5rem] border border-border bg-card p-6">
+        <section className="glass rounded-[1.5rem] p-6">
           <h2 className="font-semibold text-foreground">Start a New Period</h2>
           <p className="mb-5 mt-1 text-sm text-muted-foreground">
             Carry over what recurs every semester; dues collected and actual

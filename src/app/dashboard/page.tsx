@@ -98,6 +98,7 @@ export default async function DashboardPage() {
               value={fmtUSD(forecast.remainingBalance)}
               icon={Wallet}
               negative={forecast.remainingBalance < 0}
+              glow
             />
             <ImpactTile
               label="Outstanding dues"
@@ -116,12 +117,12 @@ export default async function DashboardPage() {
             />
           </div>
 
-          <div className="rounded-[2rem] border border-border bg-foreground p-6 text-background shadow-sm sm:p-7">
+          <div className="glass-hero rounded-[2rem] p-6 text-foreground shadow-sm sm:p-7">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-background/60">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Penny · Next action
               </p>
-              <span className="relative h-8 w-8 overflow-hidden rounded-full border border-background/30">
+              <span className="relative h-8 w-8 overflow-hidden rounded-full ring-1 ring-primary/40">
                 <Image
                   src={penny.image}
                   alt="Penny"
@@ -131,11 +132,11 @@ export default async function DashboardPage() {
                 />
               </span>
             </div>
-            <h2 className="mt-3 text-xl font-semibold">{nextAction.title}</h2>
-            <p className="mt-3 text-sm leading-6 text-background/70">{nextAction.body}</p>
+            <h2 className="mt-3 text-xl font-semibold text-foreground">{nextAction.title}</h2>
+            <p className="mt-3 text-sm leading-6 text-muted-foreground">{nextAction.body}</p>
             <Link
               href={nextAction.href}
-              className="mt-6 inline-flex h-10 items-center gap-2 rounded-full bg-background px-4 text-sm font-semibold text-foreground transition-opacity hover:opacity-90"
+              className="mt-6 inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
             >
               {nextAction.cta}
               <ArrowRight className="h-4 w-4" />
@@ -146,31 +147,26 @@ export default async function DashboardPage() {
         {/* Charts */}
         {curve && (
           <section className="mb-8 grid gap-6 lg:grid-cols-3">
-            <div className="rounded-2xl border border-border bg-card p-6 lg:col-span-2">
+            <div className="glass rounded-2xl p-6 lg:col-span-2">
               <div className="mb-1 flex items-baseline justify-between gap-3">
                 <h3 className="font-semibold text-foreground">Cash Through the Semester</h3>
                 <span
                   className={`text-sm font-semibold ${
-                    curve.min.balance < 0 ? "text-destructive" : "text-primary"
+                    curve.min.balance < 0 ? "text-money-down" : "text-primary"
                   }`}
                 >
                   {curve.min.balance < 0
-                    ? `dips ${fmtUSD(-curve.min.balance)} below zero`
+                    ? <>dips <span className="font-money">{fmtUSD(-curve.min.balance)}</span> below zero</>
                     : "stays above zero"}
                 </span>
               </div>
               <p className="mb-4 text-sm text-muted-foreground">
-                Projected balance week by week —{" "}
-                {{
-                  upfront: "dues arrive at semester start",
-                  monthly: "dues arrive in monthly installments",
-                  thirds: "dues arrive as a ⅓ deposit plus two installments",
-                }[settings.dues_schedule] ?? "dues arrive over the first six weeks"}
-                , expenses hit on their dates
+                Projected balance week by week as dues come in and expenses hit
+                their dates.
               </p>
               <CashCurveChart curve={curve} reserveTarget={settings.reserve_target} />
             </div>
-            <div className="rounded-2xl border border-border bg-card p-6">
+            <div className="glass rounded-2xl p-6">
               <h3 className="mb-1 font-semibold text-foreground">In vs Out, Monthly</h3>
               <p className="mb-4 text-sm text-muted-foreground">
                 Where the semester&apos;s money moves
@@ -183,7 +179,7 @@ export default async function DashboardPage() {
         <div className="grid gap-6 lg:grid-cols-5">
           <div className="space-y-6 lg:col-span-3">
             {/* Budget status */}
-            <section className="rounded-2xl border border-border bg-card p-6">
+            <section className="glass rounded-2xl p-6">
               <h3 className="font-semibold text-foreground">Budget Status</h3>
               <p className="mb-5 mt-1 text-sm text-muted-foreground">
                 Where {fmtUSD(available)} of projected funds is going
@@ -193,7 +189,7 @@ export default async function DashboardPage() {
                   label="Fixed Obligations"
                   amount={forecast.fixedObligations}
                   total={available}
-                  color="bg-amber-500"
+                  color="bg-warning"
                 />
                 <StatusBar
                   label="Planned Events"
@@ -227,7 +223,7 @@ export default async function DashboardPage() {
             </section>
 
             {/* Upcoming commitments */}
-            <section className="rounded-2xl border border-border bg-card p-6">
+            <section className="glass rounded-2xl p-6">
               <h3 className="mb-5 font-semibold text-foreground">Upcoming Commitments</h3>
               {upcoming.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -244,7 +240,7 @@ export default async function DashboardPage() {
                       <span
                         className={`absolute -left-[5px] mt-1.5 h-2.5 w-2.5 rounded-full ${
                           item.type === "fixed_expense"
-                            ? "bg-amber-500"
+                            ? "bg-warning"
                             : item.type === "other_income"
                               ? "bg-primary"
                               : "bg-foreground/70"
@@ -259,7 +255,7 @@ export default async function DashboardPage() {
                           </p>
                         </div>
                         <p
-                          className={`whitespace-nowrap text-sm font-semibold ${
+                          className={`whitespace-nowrap text-sm font-semibold font-money ${
                             item.type === "other_income" ? "text-primary" : "text-foreground"
                           }`}
                         >
@@ -276,7 +272,7 @@ export default async function DashboardPage() {
 
           <div className="space-y-6 lg:col-span-2">
             {/* Agent briefing */}
-            <section className="rounded-2xl border border-border bg-card p-6">
+            <section className="glass rounded-2xl p-6">
               <div className="mb-5 flex items-center gap-2">
                 <Bot className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-foreground">Penny&apos;s Briefing</h3>
@@ -289,7 +285,7 @@ export default async function DashboardPage() {
             </section>
 
             {/* Scenario peek */}
-            <section className="rounded-2xl border border-border bg-card p-6">
+            <section className="glass rounded-2xl p-6">
               <h3 className="font-semibold text-foreground">Recruitment Scenarios</h3>
               <p className="mb-4 mt-1 text-sm text-muted-foreground">
                 End-of-semester balance by pledge class size
@@ -307,8 +303,8 @@ export default async function DashboardPage() {
                       </span>
                     </span>
                     <span
-                      className={`text-sm font-semibold ${
-                        sc.remainingBalance >= 0 ? "text-primary" : "text-destructive"
+                      className={`text-sm font-semibold font-money ${
+                        sc.remainingBalance >= 0 ? "text-money-up" : "text-money-down"
                       }`}
                     >
                       {fmtUSD(sc.remainingBalance)}
@@ -326,7 +322,7 @@ export default async function DashboardPage() {
 
             {/* Dues transparency */}
             {settings.active_dues > 0 && forecast.totalIncome > 0 && (
-              <section className="rounded-2xl border border-border bg-card p-6">
+              <section className="glass rounded-2xl p-6">
                 <h3 className="font-semibold text-foreground">
                   Where a Member&apos;s Dues Go
                 </h3>
@@ -350,12 +346,21 @@ function ImpactTile({
   value,
   icon: Icon,
   negative,
+  glow,
 }: {
   label: string;
   value: string;
   icon: typeof Wallet;
   negative?: boolean;
+  glow?: boolean;
 }) {
+  const color = glow
+    ? negative
+      ? "text-money-down"
+      : "text-money-up"
+    : negative
+      ? "text-destructive"
+      : "text-foreground";
   return (
     <div className="rounded-2xl bg-muted/60 p-4">
       <div className="flex items-center justify-between gap-3">
@@ -363,7 +368,7 @@ function ImpactTile({
         <Icon className="h-4 w-4 text-primary" />
       </div>
       <p
-        className={`mt-3 text-2xl font-semibold ${negative ? "text-destructive" : "text-foreground"}`}
+        className={`mt-3 text-2xl font-semibold font-money ${color}${glow ? " glow" : ""}`}
       >
         {value}
       </p>
@@ -388,7 +393,7 @@ function StatusBar({
       <div className="mb-1.5 flex items-baseline justify-between">
         <span className="text-sm text-muted-foreground">{label}</span>
         <span className="text-sm font-medium text-foreground">
-          {fmtUSD(amount)}
+          <span className="font-money">{fmtUSD(amount)}</span>
           <span className="font-normal text-muted-foreground"> · {Math.round(pct)}%</span>
         </span>
       </div>
@@ -401,7 +406,7 @@ function StatusBar({
 
 const INSIGHT_STYLES: Record<Insight["tone"], string> = {
   good: "bg-primary/10 text-accent-foreground",
-  warn: "bg-amber-500/10 text-amber-800",
+  warn: "bg-warning/10 text-warning",
   bad: "bg-destructive/10 text-destructive",
   info: "bg-muted text-foreground/80",
 };
@@ -479,7 +484,7 @@ function DuesRow({
           style={{ width: `${Math.max(2, (amount / max) * 100)}%` }}
         />
       </div>
-      <span className="w-14 shrink-0 text-right text-sm font-medium text-foreground">
+      <span className="w-14 shrink-0 text-right text-sm font-medium text-foreground font-money">
         {fmtUSD(amount)}
       </span>
     </div>

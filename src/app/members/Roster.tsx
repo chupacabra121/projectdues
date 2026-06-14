@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState, useTransition } from "react";
-import { BellRing, Trash2 } from "lucide-react";
-import { addMember, updateMember, deleteMember } from "@/app/actions/members";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { BellRing, RotateCcw, Trash2 } from "lucide-react";
+import { addMember, updateMember, setMemberStatus } from "@/app/actions/members";
 import { MemberRow } from "@/lib/db";
 import { MemberStatus, MEMBER_STATUSES } from "@/lib/memberStatus";
 import { inputCls } from "@/components/AuthShell";
@@ -20,20 +20,34 @@ const STATUS_BADGE: Record<MemberStatus, string> = {
   pledge: "bg-secondary text-secondary-foreground",
   alumni: "bg-muted text-foreground",
   inactive: "bg-muted/60 text-muted-foreground",
+  trash: "bg-destructive/10 text-destructive",
 };
 
 const labelFor = (s: MemberStatus) =>
   MEMBER_STATUSES.find((x) => x.value === s)?.label ?? s;
 
+// You can add a member as any category except the Trash bin.
+const ADD_STATUSES = MEMBER_STATUSES.filter((s) => s.value !== "trash");
+
 const ROW_GRID = "sm:grid-cols-[1.5fr_1.8fr_1.2fr_6rem_3.5rem]";
+const DRAG_MIME = "text/plain";
 
 export default function Roster({ members }: { members: MemberRow[] }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [copied, setCopied] = useState("");
+  const [dragOver, setDragOver] = useState<MemberStatus | null>(null);
+  const [toast, setToast] = useState<{
+    id: number;
+    name: string;
+    prevStatus: MemberStatus;
+  } | null>(null);
+  const [, startTransition] = useTransition();
 
   const filtered = useMemo(
     () =>
-      filter === "all" ? members : members.filter((m) => m.status === filter),
+      filter === "all"
+        ? members.filter((m) => m.status !== "trash")
+        : members.filter((m) => m.status === filter),
     [members, filter]
   );
 
@@ -41,6 +55,44 @@ export default function Roster({ members }: { members: MemberRow[] }) {
     ...s,
     n: members.filter((m) => m.status === s.value).length,
   }));
+  const rosterCount = members.filter((m) => m.status !== "trash").length;
+
+  // Auto-dismiss the undo toast.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const moveStatus = (id: number, status: MemberStatus) => {
+    const fd = new FormData();
+    fd.set("id", String(id));
+    fd.set("status", status);
+    startTransition(() => setMemberStatus(fd));
+  };
+
+  const trashMember = (m: MemberRow) => {
+    setToast({ id: m.id, name: m.name, prevStatus: m.status });
+    moveStatus(m.id, "trash");
+  };
+  const restoreMember = (m: MemberRow) => moveStatus(m.id, "active");
+  const undoTrash = () => {
+    if (!toast) return;
+    moveStatus(toast.id, toast.prevStatus);
+    setToast(null);
+  };
+
+  const handleDrop = (status: MemberStatus, e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(null);
+    const id = Number(e.dataTransfer.getData(DRAG_MIME));
+    const m = members.find((x) => x.id === id);
+    if (!m || m.status === status) return;
+    if (status === "trash") {
+      setToast({ id: m.id, name: m.name, prevStatus: m.status });
+    }
+    moveStatus(id, status);
+  };
 
   async function copy(kind: "emails" | "phones") {
     const values = filtered
@@ -73,43 +125,67 @@ export default function Roster({ members }: { members: MemberRow[] }) {
       <div className="mb-6 flex items-baseline justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           Your member roster — names, contact details, and membership category.
-          The foundation for mass email and text reminders.
+          Drag anyone onto a category to move them.
         </p>
         <p className="whitespace-nowrap text-sm text-muted-foreground">
-          {members.length} {members.length === 1 ? "member" : "members"}
+          {rosterCount} {rosterCount === 1 ? "member" : "members"}
         </p>
       </div>
 
-      {/* Category counts — click a card to filter to it */}
-      <section className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {counts.map((c) => (
-          <button
-            key={c.value}
-            onClick={() => setFilter((f) => (f === c.value ? "all" : c.value))}
-            className={`rounded-2xl border p-5 text-left transition-colors ${
-              filter === c.value
-                ? "border-primary/50 bg-primary/5"
-                : "border-border bg-card hover:border-primary/40"
-            }`}
-          >
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {c.plural}
-            </p>
-            <p className="mt-1.5 text-2xl font-semibold text-foreground">{c.n}</p>
-          </button>
-        ))}
+      {/* Category cards — click to filter, or drop a member to move them */}
+      <section className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+        {counts.map((c) => {
+          const isTrash = c.value === "trash";
+          const over = dragOver === c.value;
+          return (
+            <button
+              key={c.value}
+              onClick={() => setFilter((f) => (f === c.value ? "all" : c.value))}
+              onDragEnter={(e) => e.preventDefault()}
+              onDragOver={(e) => {
+                // Allowing the drop AND matching the row's effectAllowed="move"
+                // is what makes the browser actually fire onDrop here.
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragOver !== c.value) setDragOver(c.value);
+              }}
+              onDragLeave={() => setDragOver((d) => (d === c.value ? null : d))}
+              onDrop={(e) => handleDrop(c.value, e)}
+              className={`rounded-2xl p-5 text-left transition-colors ${
+                over
+                  ? "border border-primary bg-primary/10 ring-2 ring-primary/30"
+                  : filter === c.value
+                    ? "border border-primary/50 bg-primary/5"
+                    : `glass hover:border-primary/40 ${
+                        isTrash ? "border-dashed" : ""
+                      }`
+              }`}
+            >
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {c.plural}
+              </p>
+              <p
+                className={`mt-1.5 text-2xl font-semibold ${
+                  isTrash ? "text-muted-foreground" : "text-foreground"
+                }`}
+              >
+                {c.n}
+              </p>
+            </button>
+          );
+        })}
       </section>
 
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex rounded-full border border-border bg-card p-0.5">
+        <div className="flex flex-wrap rounded-full border border-border bg-card p-0.5">
           {FILTERS.map((f) => (
             <button
               key={f.key}
               onClick={() => setFilter(f.key)}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 filter === f.key
-                  ? "bg-foreground text-background"
+                  ? "bg-primary/15 text-accent-foreground ring-1 ring-primary/30"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -132,7 +208,7 @@ export default function Roster({ members }: { members: MemberRow[] }) {
           Copy phones
         </button>
         <Link
-          href="/agents/dues-collection/email"
+          href="/email"
           title="Open Dunn's email composer"
           className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
         >
@@ -141,13 +217,13 @@ export default function Roster({ members }: { members: MemberRow[] }) {
         </Link>
       </div>
       <p className="mb-4 text-xs text-muted-foreground/80">
-        Copy buttons follow the current filter — e.g. filter to{" "}
-        <span className="font-medium">Alumni</span>, then copy emails to paste
-        into a newsletter.
+        Drag a member onto a category to move them. Deleting sends them to{" "}
+        <span className="font-medium">Trash</span> — undo from the popup, or drag
+        them back out.
       </p>
 
       {/* Roster table */}
-      <section className="overflow-hidden rounded-[1.5rem] border border-border bg-card">
+      <section className="glass overflow-hidden rounded-[1.5rem]">
         <div className={`hidden gap-3 border-b border-border/60 px-5 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid ${ROW_GRID}`}>
           <span>Name</span>
           <span>Email</span>
@@ -159,21 +235,58 @@ export default function Roster({ members }: { members: MemberRow[] }) {
           <p className="py-8 text-center text-sm text-muted-foreground/70">
             {members.length === 0
               ? "No members yet — add them below."
-              : "No members in this category."}
+              : filter === "trash"
+                ? "Trash is empty."
+                : "No members in this category."}
           </p>
         )}
         <div className="divide-y divide-border/40">
           {filtered.map((m) => (
-            <MemberLine key={m.id} member={m} />
+            <MemberLine
+              key={m.id}
+              member={m}
+              onTrash={trashMember}
+              onRestore={restoreMember}
+            />
           ))}
         </div>
         <AddMemberLine />
       </section>
+
+      {/* Undo toast */}
+      {toast && (
+        <div className="glass-elevated fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-2xl px-4 py-3 shadow-xl">
+          <span className="text-sm text-foreground">
+            Moved <span className="font-medium">{toast.name}</span> to Trash
+          </span>
+          <button
+            onClick={undoTrash}
+            className="rounded-full bg-foreground px-3 py-1 text-sm font-semibold text-background transition-opacity hover:opacity-90"
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => setToast(null)}
+            aria-label="Dismiss"
+            className="text-muted-foreground/60 transition-colors hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
+      )}
     </>
   );
 }
 
-function MemberLine({ member }: { member: MemberRow }) {
+function MemberLine({
+  member,
+  onTrash,
+  onRestore,
+}: {
+  member: MemberRow;
+  onTrash: (m: MemberRow) => void;
+  onRestore: (m: MemberRow) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -219,23 +332,33 @@ function MemberLine({ member }: { member: MemberRow }) {
     );
   }
 
+  // The whole row opens the editor (click name/email/phone/category) and is
+  // draggable onto a category card to re-categorize without opening it.
   return (
-    <div className={`group grid items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40 ${ROW_GRID}`}>
-      <button
-        onClick={() => setEditing(true)}
-        className="cursor-pointer truncate text-left text-sm font-medium text-foreground"
-        title="Click to edit"
-      >
+    <div
+      role="button"
+      tabIndex={0}
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData(DRAG_MIME, String(member.id));
+        e.dataTransfer.effectAllowed = "move";
+      }}
+      onClick={() => setEditing(true)}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          setEditing(true);
+        }
+      }}
+      title="Click to edit · drag to a category to move"
+      className={`group grid cursor-pointer items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40 ${ROW_GRID}`}
+    >
+      <span className="truncate text-sm font-medium text-foreground">
         {member.name}
-      </button>
+      </span>
       <span className="truncate text-sm text-muted-foreground">
-        {member.email ? (
-          <a href={`mailto:${member.email}`} className="transition-colors hover:text-primary hover:underline">
-            {member.email}
-          </a>
-        ) : (
-          <span className="text-muted-foreground/40">—</span>
-        )}
+        {member.email || <span className="text-muted-foreground/40">—</span>}
       </span>
       <span className="truncate text-sm text-muted-foreground">
         {member.phone || <span className="text-muted-foreground/40">—</span>}
@@ -246,18 +369,31 @@ function MemberLine({ member }: { member: MemberRow }) {
         {labelFor(member.status)}
       </span>
       <div className="flex items-center justify-end">
-        <button
-          disabled={isPending}
-          onClick={() => {
-            const fd = new FormData();
-            fd.set("id", String(member.id));
-            startTransition(() => deleteMember(fd));
-          }}
-          className="text-muted-foreground/40 transition-colors hover:text-destructive disabled:opacity-50"
-          title="Delete member"
-        >
-          <Trash2 className="h-4 w-4" />
-        </button>
+        {member.status === "trash" ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onRestore(member);
+            }}
+            className="text-muted-foreground/50 transition-colors hover:text-primary"
+            title="Restore to Active"
+            aria-label="Restore member"
+          >
+            <RotateCcw className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onTrash(member);
+            }}
+            className="text-muted-foreground/40 transition-colors hover:text-destructive"
+            title="Move to Trash"
+            aria-label="Move to Trash"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -282,7 +418,7 @@ function AddMemberLine() {
       <input name="email" type="email" placeholder="email (optional)" className={inputCls} />
       <input name="phone" placeholder="phone (optional)" className={inputCls} />
       <select name="status" defaultValue="active" className={inputCls}>
-        {MEMBER_STATUSES.map((s) => (
+        {ADD_STATUSES.map((s) => (
           <option key={s.value} value={s.value}>
             {s.label}
           </option>

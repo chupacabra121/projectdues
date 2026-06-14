@@ -15,7 +15,12 @@ export default function Actuals({
   items: BudgetItemRow[];
   members: MemberRow[];
 }) {
-  const expenses = items.filter((i) => i.type !== "other_income");
+  // Per-item actual tracking covers flat expenses and events. Per-member
+  // variable costs are predictable (rate × headcount), so they're rolled into
+  // the forecast totals rather than tracked line by line here.
+  const expenses = items.filter(
+    (i) => i.type === "fixed_expense" || i.type === "planned_event"
+  );
   const otherIncome = items.filter((i) => i.type === "other_income");
 
   // Planned vs actual on the spending side, computed on semester totals.
@@ -101,7 +106,7 @@ export default function Actuals({
       </section>
 
       {/* Expenses — planned vs actual */}
-      <section className="mb-6 overflow-hidden rounded-[1.5rem] border border-border bg-card">
+      <section className="glass mb-6 overflow-hidden rounded-[1.5rem]">
         <div className="border-b border-border/60 px-6 pb-4 pt-6">
           <h2 className="font-semibold text-foreground">Expenses — planned vs actual</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -131,7 +136,7 @@ export default function Actuals({
       </section>
 
       {/* Dues — billed vs collected (from the per-member paid checkboxes) */}
-      <section className="mb-6 overflow-hidden rounded-[1.5rem] border border-border bg-card">
+      <section className="glass mb-6 overflow-hidden rounded-[1.5rem]">
         <div className="border-b border-border/60 px-6 pb-4 pt-6">
           <h2 className="font-semibold text-foreground">Dues — billed vs collected</h2>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -192,7 +197,7 @@ export default function Actuals({
                       {m.status === "pledge" ? "pledge" : "active"}
                     </span>
                   </span>
-                  <span className="font-medium text-destructive">{fmtUSD(m.amount)}</span>
+                  <span className="font-money font-medium text-money-down">{fmtUSD(m.amount)}</span>
                 </li>
               ))}
               {unpaid.length > 12 && (
@@ -207,7 +212,7 @@ export default function Actuals({
 
       {/* Other income — planned vs actual */}
       {otherIncome.length > 0 && (
-        <section className="overflow-hidden rounded-[1.5rem] border border-border bg-card">
+        <section className="glass overflow-hidden rounded-[1.5rem]">
           <div className="border-b border-border/60 px-6 pb-4 pt-6">
             <h2 className="font-semibold text-foreground">Other income — planned vs actual</h2>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -246,8 +251,8 @@ function Stat({
     <div className="px-6 py-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
       <p
-        className={`mt-1 text-xl font-semibold ${
-          tone === "good" ? "text-primary" : tone === "bad" ? "text-destructive" : "text-foreground"
+        className={`font-money mt-1 text-xl font-semibold ${
+          tone === "good" ? "text-money-up" : tone === "bad" ? "text-money-down" : "text-foreground"
         }`}
       >
         {value}
@@ -274,7 +279,7 @@ function CompareLine({
       <span className="flex items-center gap-2">
         <span className="text-muted-foreground">{plan}</span>
         <span className="text-muted-foreground/50">→</span>
-        <span className={`font-medium ${good ? "text-primary" : "text-destructive"}`}>
+        <span className={`font-medium ${good ? "text-positive-soft" : "text-negative-soft"}`}>
           {actual}
         </span>
       </span>
@@ -294,16 +299,16 @@ function SummaryCard({
   tone?: "good" | "bad";
 }) {
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
+    <div className="glass rounded-2xl p-5">
       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <p
-        className={`mt-1.5 text-2xl font-semibold ${
+        className={`font-money mt-1.5 text-2xl font-semibold ${
           tone === "good"
-            ? "text-primary"
+            ? "text-money-up"
             : tone === "bad"
-              ? "text-destructive"
+              ? "text-money-down"
               : "text-foreground"
         }`}
       >
@@ -368,7 +373,7 @@ function ExpenseRow({
         </p>
       </div>
 
-      <p className="text-right text-sm text-muted-foreground">
+      <p className="font-money text-right text-sm text-muted-foreground">
         {fmtUSD(plannedSemester)}
       </p>
 
@@ -386,7 +391,7 @@ function ExpenseRow({
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
           }}
-          className="w-full rounded-lg border border-input bg-background py-1.5 pl-6 pr-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:opacity-50"
+          className="font-money w-full rounded-lg border border-input bg-background py-1.5 pl-6 pr-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:opacity-50"
           title={n > 1 ? "Per month — multiplied across the semester" : undefined}
         />
         {n > 1 && (
@@ -409,15 +414,15 @@ function VarianceCell({
   goodWhenPositive?: boolean;
 }) {
   if (delta == null || delta === 0) {
-    return <span className="text-right text-sm text-muted-foreground/50">—</span>;
+    return <span className="font-money text-right text-sm text-muted-foreground/50">—</span>;
   }
   // For spending, over plan (positive) is bad. For income, over plan is good.
   const positive = delta > 0;
   const isGood = goodWhenPositive ? positive : !positive;
   return (
     <span
-      className={`text-right text-sm font-semibold ${
-        isGood ? "text-primary" : "text-destructive"
+      className={`font-money text-right text-sm font-semibold ${
+        isGood ? "text-money-up" : "text-money-down"
       }`}
     >
       {positive ? "+" : "−"}

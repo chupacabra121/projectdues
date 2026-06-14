@@ -10,7 +10,7 @@ import {
 } from "@/lib/categorize";
 
 const PATHS = ["/dashboard", "/budget", "/actuals", "/scenarios", "/periods"];
-const ITEM_TYPES = ["fixed_expense", "planned_event", "other_income"] as const;
+const ITEM_TYPES = ["fixed_expense", "planned_event", "other_income", "variable_expense"] as const;
 type ItemType = (typeof ITEM_TYPES)[number];
 
 function revalidateAll() {
@@ -42,6 +42,7 @@ interface ParsedItem {
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
   attendance: number | null;
+  cost_basis: string | null;
   notes: string;
 }
 
@@ -65,14 +66,27 @@ function parseItemForm(formData: FormData): ParsedItem | null {
       ? Math.round(attendanceRaw)
       : null;
 
+  const basisRaw = String(formData.get("cost_basis") ?? "");
+  const cost_basis =
+    type === "variable_expense"
+      ? ["active", "pledge", "member"].includes(basisRaw)
+        ? basisRaw
+        : "active"
+      : null;
+
   return {
     type,
     name,
     amount: parseAmount(formData.get("amount")),
     date: parseDate(formData.get("date")),
-    frequency: type === "planned_event" ? "one_time" : frequency,
+    // Per-head and event costs are a single per-semester figure.
+    frequency:
+      type === "planned_event" || type === "variable_expense"
+        ? "one_time"
+        : frequency,
     category,
     attendance,
+    cost_basis,
     notes: String(formData.get("notes") ?? "").trim(),
   };
 }
@@ -87,8 +101,8 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
   // Actual page once a cost is known.
   getDb()
     .prepare(
-      `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, notes)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
+      `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, cost_basis, notes)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       user.id,
@@ -100,6 +114,7 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
       item.frequency,
       item.category,
       item.attendance,
+      item.cost_basis,
       item.notes
     );
   revalidateAll();
@@ -115,7 +130,7 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
   getDb()
     .prepare(
       `UPDATE budget_items SET
-        name = ?, amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, notes = ?
+        name = ?, amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, cost_basis = ?, notes = ?
        WHERE id = ? AND user_id = ? AND type = ?`
     )
     .run(
@@ -125,6 +140,7 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
       item.frequency,
       item.category,
       item.attendance,
+      item.cost_basis,
       item.notes,
       id,
       user.id,

@@ -59,7 +59,7 @@ export function activeMemberCount(s: ForecastSettings): number {
 
 export interface ForecastItem {
   id?: number;
-  type: "fixed_expense" | "planned_event" | "other_income";
+  type: "fixed_expense" | "planned_event" | "other_income" | "variable_expense";
   name: string;
   amount: number;
   /** Real cost once known — replaces the planned amount in every total. */
@@ -67,6 +67,52 @@ export interface ForecastItem {
   date: string | null;
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
+  /** variable_expense only: 'active' | 'pledge' | 'member' — what `amount` is per. */
+  cost_basis?: string | null;
+}
+
+/** Per-person bases a variable cost can scale on. */
+export type CostBasis = "active" | "pledge" | "member";
+
+export function costBasisLabel(basis: string | null | undefined): string {
+  if (basis === "pledge") return "pledge";
+  if (basis === "member") return "person";
+  return "active member";
+}
+
+/** How many heads a variable cost applies to, for a given pledge-class size. */
+export function variableHeadcount(
+  basis: string | null | undefined,
+  s: ForecastSettings,
+  pledgeCount: number
+): number {
+  const active = activeMemberCount(s);
+  if (basis === "pledge") return Math.max(0, pledgeCount);
+  if (basis === "member") return active + Math.max(0, pledgeCount);
+  return active; // 'active' (default)
+}
+
+/** A single variable-expense item's total at a given pledge-class size. */
+export function variableItemCost(
+  item: ForecastItem,
+  s: ForecastSettings,
+  pledgeCount: number
+): number {
+  return (
+    Math.max(0, effectiveAmount(item)) *
+    variableHeadcount(item.cost_basis, s, pledgeCount)
+  );
+}
+
+/** Total of all variable obligations at a given pledge-class size. */
+export function variableObligationsFor(
+  items: ForecastItem[],
+  s: ForecastSettings,
+  pledgeCount: number
+): number {
+  return items
+    .filter((i) => i.type === "variable_expense")
+    .reduce((sum, i) => sum + variableItemCost(i, s, pledgeCount), 0);
 }
 
 /** The number the math should use: actual cost once known, plan until then. */
@@ -89,6 +135,7 @@ export interface Forecast {
   variance: number;
   outstandingDues: number;
   fixedObligations: number;
+  variableObligations: number;
   plannedEvents: number;
   remainingBalance: number;
   totalCommitted: number;
@@ -125,6 +172,9 @@ export function occurrences(item: ForecastItem, s: ForecastSettings): number {
 }
 
 export function itemSemesterCost(item: ForecastItem, s: ForecastSettings): number {
+  if (item.type === "variable_expense") {
+    return variableItemCost(item, s, s.pledges_expected);
+  }
   return effectiveAmount(item) * occurrences(item, s);
 }
 
@@ -146,12 +196,19 @@ export function buildForecast(
   const projectedRevenue = revenueFor(s, s.pledges_expected);
   const otherIncome = totalFor(items, "other_income", s);
   const fixedObligations = totalFor(items, "fixed_expense", s);
+  // Per-head costs at the expected pledge class; scenarios re-scale below.
+  const variableObligations = variableObligationsFor(items, s, s.pledges_expected);
   const plannedEvents = totalFor(items, "planned_event", s);
-  const totalCommitted = fixedObligations + plannedEvents;
+  const flatCommitted = fixedObligations + plannedEvents;
+  const totalCommitted = flatCommitted + variableObligations;
   const totalIncome = projectedRevenue + otherIncome;
   const remainingBalance = s.starting_balance + totalIncome - totalCommitted;
   const variance = items
-    .filter((i) => i.type !== "other_income" && i.actual_amount != null)
+    .filter(
+      (i) =>
+        (i.type === "fixed_expense" || i.type === "planned_event") &&
+        i.actual_amount != null
+    )
     .reduce(
       (sum, i) => sum + (i.actual_amount! - i.amount) * occurrences(i, s),
       0
@@ -165,11 +222,13 @@ export function buildForecast(
     ] as const
   ).map(([label, pledgeCount]) => {
     const rev = revenueFor(s, pledgeCount);
+    // More pledges cost more (per-pledge / per-person variable obligations).
+    const committed = flatCommitted + variableObligationsFor(items, s, pledgeCount);
     return {
       label,
       pledgeCount,
       projectedRevenue: rev,
-      remainingBalance: s.starting_balance + rev + otherIncome - totalCommitted,
+      remainingBalance: s.starting_balance + rev + otherIncome - committed,
     };
   });
 
@@ -180,6 +239,7 @@ export function buildForecast(
     variance,
     outstandingDues: Math.max(0, projectedRevenue - s.dues_collected),
     fixedObligations,
+    variableObligations,
     plannedEvents,
     remainingBalance,
     totalCommitted,
