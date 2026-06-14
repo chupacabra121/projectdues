@@ -48,7 +48,7 @@ export const AGENTS: AgentProfile[] = [
   },
   {
     slug: "dues-collection",
-    href: "/agents/dues-collection/email",
+    href: "/email",
     name: "Dunn",
     role: "Dues Collection",
     status: "active",
@@ -59,9 +59,9 @@ export const AGENTS: AgentProfile[] = [
     focus: ["Email reminders", "SMS reminders", "Escalation ladder", "Collections report"],
     subtabs: ["Email", "SMS", "Collections"],
     navTabs: [
-      { href: "/agents/dues-collection/email", label: "Email" },
-      { href: "/agents/dues-collection/sms", label: "SMS" },
-      { href: "/agents/dues-collection/collections", label: "Collections" },
+      { href: "/email", label: "Email" },
+      { href: "/sms", label: "SMS" },
+      { href: "/collections", label: "Collections" },
     ],
   },
   {

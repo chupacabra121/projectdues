@@ -5,8 +5,18 @@
  * bundle (importing from db.ts would drag better-sqlite3 into the browser).
  */
 
-export type MemberStatus = "active" | "pledge" | "alumni" | "inactive";
+export type MemberStatus =
+  | "active"
+  | "pledge"
+  | "alumni"
+  | "inactive"
+  | "trash";
 
+/**
+ * All categories in display order, including Trash (the soft-delete bin).
+ * Trash is a real status but is excluded from the add-member dropdown and from
+ * the "All" view — deleting a member moves them here instead of erasing them.
+ */
 export const MEMBER_STATUSES: {
   value: MemberStatus;
   label: string;
@@ -16,4 +26,5 @@ export const MEMBER_STATUSES: {
   { value: "pledge", label: "Pledge", plural: "Pledges" },
   { value: "alumni", label: "Alumni", plural: "Alumni" },
   { value: "inactive", label: "Inactive", plural: "Inactive" },
+  { value: "trash", label: "Trash", plural: "Trash" },
 ];

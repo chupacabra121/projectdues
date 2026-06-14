@@ -28,7 +28,7 @@ export default function AppShell({
         periods={periods}
         activePeriodId={active?.id ?? null}
       />
-      <main className="flex-1">{children}</main>
+      <main className="grid-substrate relative z-[1] flex-1">{children}</main>
     </>
   );
 }

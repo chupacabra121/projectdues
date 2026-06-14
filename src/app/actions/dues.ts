@@ -5,7 +5,15 @@ import { getDb, getActivePeriod, recomputeDerivedDues } from "@/lib/db";
 import { MAX_DUES_PLANS } from "@/lib/memberDues";
 import { requireUser } from "@/lib/auth";
 
-const PATHS = ["/dashboard", "/budget", "/actuals", "/dues", "/scenarios", "/periods"];
+const PATHS = [
+  "/dashboard",
+  "/budget",
+  "/actuals",
+  "/dues",
+  "/scenarios",
+  "/periods",
+  "/collections",
+];
 
 function revalidateAll() {
   for (const p of PATHS) revalidatePath(p);
@@ -67,8 +75,13 @@ export async function setMemberDuesPaid(formData: FormData): Promise<void> {
   const period = getActivePeriod(user.id);
   const paid = String(formData.get("paid")) === "1" ? 1 : 0;
   getDb()
-    .prepare("UPDATE members SET dues_paid = ? WHERE id = ? AND user_id = ?")
-    .run(paid, id, user.id);
+    .prepare(
+      `UPDATE members
+       SET dues_paid = ?,
+           collection_stage = CASE WHEN ? = 1 THEN 'paid' ELSE collection_stage END
+       WHERE id = ? AND user_id = ?`
+    )
+    .run(paid, paid, id, user.id);
   // Roll the checkbox into the period's collected-to-date.
   if (period) recomputeDerivedDues(user.id, period.id);
   revalidateAll();

@@ -21,7 +21,7 @@ export function AuthShell({
     <main className="flex-1 grid place-items-center px-4 py-12">
       <div className="w-full max-w-md">
         <Logo className="mb-8" />
-        <div className="bg-card rounded-3xl border border-border shadow-sm p-8">
+        <div className="glass rounded-3xl shadow-sm p-8">
           <h1 className="text-xl font-semibold text-foreground">{title}</h1>
           <p className="text-sm text-muted-foreground mt-1 mb-6">{subtitle}</p>
           {children}

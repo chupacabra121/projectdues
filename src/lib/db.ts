@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { ActiveDuesBreakdown } from "./forecast";
 import { MemberStatus } from "./memberStatus";
+import { CollectionStage, ContactChannel } from "./collectionStages";
 import {
   DuesPlan,
   DEFAULT_DUES_PLANS,
@@ -49,13 +50,14 @@ function createDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS budget_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL REFERENCES users(id),
-      type TEXT NOT NULL CHECK (type IN ('fixed_expense', 'planned_event', 'other_income')),
+      type TEXT NOT NULL CHECK (type IN ('fixed_expense', 'planned_event', 'other_income', 'variable_expense')),
       name TEXT NOT NULL,
       amount REAL NOT NULL,
       date TEXT,
       frequency TEXT NOT NULL DEFAULT 'one_time' CHECK (frequency IN ('one_time', 'monthly', 'yearly')),
       category TEXT NOT NULL DEFAULT '',
       attendance INTEGER,
+      cost_basis TEXT,
       notes TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -67,10 +69,14 @@ function createDb(): Database.Database {
       name TEXT NOT NULL,
       email TEXT NOT NULL DEFAULT '',
       phone TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive', 'trash')),
       aid_plan INTEGER,
       aid_amount REAL,
       dues_paid INTEGER NOT NULL DEFAULT 0,
+      collection_stage TEXT NOT NULL DEFAULT 'not_contacted',
+      contact_count INTEGER NOT NULL DEFAULT 0,
+      last_contacted_at TEXT,
+      last_contact_channel TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
@@ -103,6 +109,7 @@ function createDb(): Database.Database {
       dues_schedule TEXT NOT NULL DEFAULT 'sixweek',
       active_dues_breakdown TEXT,
       dues_plans TEXT,
+      collection_payment_instructions TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_periods_user ON periods(user_id);
@@ -110,6 +117,7 @@ function createDb(): Database.Database {
   migrateBudgetItemTypes(db);
   migrateMemberStatuses(db);
   addColumnIfMissing(db, "budget_items", "actual_amount", "REAL");
+  addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
   addColumnIfMissing(db, "settings", "dues_schedule", "TEXT NOT NULL DEFAULT 'sixweek'");
   addColumnIfMissing(db, "settings", "active_period_id", "INTEGER");
   addColumnIfMissing(db, "budget_items", "period_id", "INTEGER");
@@ -117,8 +125,13 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "members", "aid_plan", "INTEGER");
   addColumnIfMissing(db, "members", "aid_amount", "REAL");
   addColumnIfMissing(db, "members", "dues_paid", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "members", "collection_stage", "TEXT NOT NULL DEFAULT 'not_contacted'");
+  addColumnIfMissing(db, "members", "contact_count", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "members", "last_contacted_at", "TEXT");
+  addColumnIfMissing(db, "members", "last_contact_channel", "TEXT");
   addColumnIfMissing(db, "periods", "active_dues_breakdown", "TEXT");
   addColumnIfMissing(db, "periods", "dues_plans", "TEXT");
+  addColumnIfMissing(db, "periods", "collection_payment_instructions", "TEXT NOT NULL DEFAULT ''");
   migrateToPeriods(db);
   return db;
 }
@@ -301,22 +314,18 @@ function migrateBudgetItemTypes(db: Database.Database) {
   const row = db
     .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='budget_items'")
     .get() as { sql: string } | undefined;
-  if (!row || row.sql.includes("other_income")) return;
+  if (!row || row.sql.includes("variable_expense")) return;
+  // Rebuild from the table's own definition so every existing column (incl.
+  // actual_amount / period_id) is preserved — only the type CHECK is widened.
+  const newSchema = row.sql
+    .replace(/CREATE TABLE\s+["']?budget_items["']?/i, "CREATE TABLE budget_items_new")
+    .replace(
+      /CHECK\s*\(\s*type\s+IN\s*\([^)]*\)\s*\)/i,
+      "CHECK (type IN ('fixed_expense', 'planned_event', 'other_income', 'variable_expense'))"
+    );
   db.exec(`
     BEGIN;
-    CREATE TABLE budget_items_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL REFERENCES users(id),
-      type TEXT NOT NULL CHECK (type IN ('fixed_expense', 'planned_event', 'other_income')),
-      name TEXT NOT NULL,
-      amount REAL NOT NULL,
-      date TEXT,
-      frequency TEXT NOT NULL DEFAULT 'one_time' CHECK (frequency IN ('one_time', 'monthly', 'yearly')),
-      category TEXT NOT NULL DEFAULT '',
-      attendance INTEGER,
-      notes TEXT NOT NULL DEFAULT '',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
+    ${newSchema};
     INSERT INTO budget_items_new SELECT * FROM budget_items;
     DROP TABLE budget_items;
     ALTER TABLE budget_items_new RENAME TO budget_items;
@@ -334,12 +343,29 @@ function migrateMemberStatuses(db: Database.Database) {
     .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'")
     .get() as { sql: string } | undefined;
   if (!row) return;
+  // Up to date once the CHECK allows 'trash' and the old amount_paid is gone.
   const migrated =
-    row.sql.includes("'alumni'") && !row.sql.includes("amount_paid");
+    row.sql.includes("'trash'") && !row.sql.includes("amount_paid");
   if (migrated) return;
-  const hasPeriod = (
-    db.prepare("PRAGMA table_info(members)").all() as { name: string }[]
-  ).some((c) => c.name === "period_id");
+  // Preserve every optional column that already exists so a rebuild for the
+  // widened status set never silently drops dues data.
+  const existing = new Set(
+    (db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).map(
+      (c) => c.name
+    )
+  );
+  const required = ["id", "user_id", "name", "email", "phone", "status", "created_at"];
+  const optional = [
+    "aid_plan",
+    "aid_amount",
+    "dues_paid",
+    "collection_stage",
+    "contact_count",
+    "last_contacted_at",
+    "last_contact_channel",
+    "period_id",
+  ].filter((c) => existing.has(c));
+  const copyCols = [...required, ...optional].join(", ");
   db.exec(`
     BEGIN;
     CREATE TABLE members_new (
@@ -348,14 +374,18 @@ function migrateMemberStatuses(db: Database.Database) {
       name TEXT NOT NULL,
       email TEXT NOT NULL DEFAULT '',
       phone TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive', 'trash')),
+      aid_plan INTEGER,
+      aid_amount REAL,
+      dues_paid INTEGER NOT NULL DEFAULT 0,
+      collection_stage TEXT NOT NULL DEFAULT 'not_contacted',
+      contact_count INTEGER NOT NULL DEFAULT 0,
+      last_contacted_at TEXT,
+      last_contact_channel TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       period_id INTEGER
     );
-    INSERT INTO members_new (id, user_id, name, email, phone, status, created_at, period_id)
-      SELECT id, user_id, name, email, phone, status, created_at, ${
-        hasPeriod ? "period_id" : "NULL"
-      } FROM members;
+    INSERT INTO members_new (${copyCols}) SELECT ${copyCols} FROM members;
     DROP TABLE members;
     ALTER TABLE members_new RENAME TO members;
     CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
@@ -405,12 +435,13 @@ export interface PeriodRow {
   active_dues_breakdown: ActiveDuesBreakdown | null;
   /** Financial-aid plans (name + preset amount); parsed by the getters. */
   dues_plans: DuesPlan[];
+  collection_payment_instructions: string;
 }
 
 export interface BudgetItemRow {
   id: number;
   user_id: number;
-  type: "fixed_expense" | "planned_event" | "other_income";
+  type: "fixed_expense" | "planned_event" | "other_income" | "variable_expense";
   name: string;
   amount: number;
   actual_amount: number | null;
@@ -418,6 +449,8 @@ export interface BudgetItemRow {
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
   attendance: number | null;
+  /** For variable_expense: 'active' | 'pledge' | 'member' — what `amount` is per. */
+  cost_basis: string | null;
   notes: string;
 }
 
@@ -451,6 +484,10 @@ export interface MemberRow {
   aid_amount: number | null;
   /** 1 once the member has paid their dues (the Dues-tab checkbox). */
   dues_paid: number;
+  collection_stage: CollectionStage;
+  contact_count: number;
+  last_contacted_at: string | null;
+  last_contact_channel: ContactChannel | null;
 }
 
 export function getMembers(userId: number, periodId: number): MemberRow[] {

@@ -39,59 +39,53 @@ export default async function ScenariosPage() {
           return (
             <section
               key={sc.label}
-              className={`rounded-[1.5rem] border p-6 ${
-                isExpected
-                  ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-card"
+              className={`rounded-[1.5rem] p-6 ${
+                isExpected ? "glass-hero" : "glass"
               }`}
             >
-              <p
-                className={`text-xs font-medium uppercase tracking-wide ${
-                  isExpected ? "text-background/60" : "text-muted-foreground"
-                }`}
-              >
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 {sc.label}
               </p>
               <p className="mt-1 text-2xl font-semibold">
                 {sc.pledgeCount}{" "}
                 <span
-                  className={`text-sm font-normal ${isExpected ? "text-background/60" : "text-muted-foreground"}`}
+                  className="text-sm font-normal text-muted-foreground"
                 >
                   pledges
                 </span>
               </p>
               <dl
-                className={`mt-4 space-y-2 text-sm ${isExpected ? "text-background/70" : "text-muted-foreground"}`}
+                className="mt-4 space-y-2 text-sm text-muted-foreground"
               >
                 <div className="flex justify-between">
                   <dt>Dues revenue</dt>
-                  <dd className="font-medium">{fmtUSD(sc.projectedRevenue)}</dd>
+                  <dd className="font-money font-medium">{fmtUSD(sc.projectedRevenue)}</dd>
                 </div>
                 {forecast.otherIncome > 0 && (
                   <div className="flex justify-between">
                     <dt>Other income</dt>
-                    <dd className="font-medium">{fmtUSD(forecast.otherIncome)}</dd>
+                    <dd className="font-money font-medium">{fmtUSD(forecast.otherIncome)}</dd>
                   </div>
                 )}
                 <div className="flex justify-between">
                   <dt>Committed</dt>
-                  <dd className="font-medium">−{fmtUSD(forecast.totalCommitted)}</dd>
+                  <dd className="font-money font-medium">−{fmtUSD(forecast.totalCommitted)}</dd>
                 </div>
                 <div
                   className={`flex justify-between border-t pt-2 ${
-                    isExpected ? "border-background/20" : "border-border"
+                    isExpected ? "border-border-strong" : "border-border"
                   }`}
                 >
                   <dt className="font-medium">End balance</dt>
                   <dd
-                    className={`font-semibold ${
+                    className={`font-money font-semibold ${
                       isExpected
                         ? positive
-                          ? "text-emerald-300"
-                          : "text-red-300"
+                          ? "text-positive-soft"
+                          : "text-negative-soft"
                         : positive
-                          ? "text-primary"
-                          : "text-destructive"
+                          ? "text-money-up"
+                          : "text-money-down"
                     }`}
                   >
                     {fmtUSD(sc.remainingBalance)}
@@ -103,7 +97,7 @@ export default async function ScenariosPage() {
         })}
       </div>
 
-      <div className="mt-8 rounded-2xl border border-border bg-card p-6">
+      <div className="mt-8 rounded-2xl glass p-6">
         <h3 className="mb-3 font-semibold text-foreground">How to read this</h3>
         <ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-muted-foreground">
           <li>
@@ -116,7 +110,7 @@ export default async function ScenariosPage() {
           </li>
           <li>
             Each pledge is worth{" "}
-            <span className="font-medium text-foreground">
+            <span className="font-money font-medium text-foreground">
               {fmtUSD(period.pledge_dues * period.collection_rate)}
             </span>{" "}
             in expected revenue at your current collection rate.

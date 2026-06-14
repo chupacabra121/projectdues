@@ -111,7 +111,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                 {i + 1}
               </div>
               <span
-                className={`text-sm ${i === stepIndex ? "font-medium text-foreground" : "text-muted-foreground/70"}`}
+                className={`text-sm ${i === stepIndex ? "font-medium text-foreground" : "text-muted-foreground"}`}
               >
                 {s.label}
               </span>
@@ -122,7 +122,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
           ))}
         </div>
 
-        <div className="bg-card rounded-3xl border border-border shadow-sm p-8">
+        <div className="glass rounded-3xl shadow-sm p-8">
           {step === "import" && (
             <div>
               <h1 className="text-xl font-semibold mb-1">Bring in your roster</h1>
@@ -187,11 +187,11 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               <div className="space-y-3 mb-4">
                 <div className="flex items-center justify-between rounded-xl bg-primary/10 border border-primary/20 px-4 py-3.5">
                   <span className="text-sm font-medium text-accent-foreground">Active Members</span>
-                  <span className="text-lg font-semibold text-primary">{importResult.activeCount}</span>
+                  <span className="text-lg font-semibold text-primary font-money">{importResult.activeCount}</span>
                 </div>
-                <div className="flex items-center justify-between rounded-xl bg-secondary border border-border px-4 py-3.5">
+                <div className="flex items-center justify-between rounded-xl glass px-4 py-3.5">
                   <span className="text-sm font-medium text-foreground">Pledges</span>
-                  <span className="text-lg font-semibold text-foreground">{importResult.pledgeCount}</span>
+                  <span className="text-lg font-semibold text-foreground font-money">{importResult.pledgeCount}</span>
                 </div>
               </div>
               {importResult.members.length > 0 && (
@@ -290,17 +290,17 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                     type="number" min={0} max={100} className={inputCls}
                     value={collectionRate} onChange={(e) => setCollectionRate(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground/70 mt-1">
+                  <p className="text-xs text-muted-foreground mt-1">
                     Most chapters collect 90–97% of billed dues.
                   </p>
                 </div>
               </div>
 
-              <div className="mt-6 rounded-xl bg-primary text-primary-foreground px-5 py-4">
-                <p className="text-xs uppercase tracking-wide text-background/60">Projected Revenue</p>
-                <p className="text-3xl font-semibold mt-1">{fmtUSD(projectedRevenue)}</p>
-                <p className="text-xs text-background/60 mt-2">
-                  ({nActives} actives × {fmtUSD(dActive)} + {nExpected} new pledges × {fmtUSD(dPledge)}) × {Math.round(rate * 100)}%
+              <div className="mt-6 rounded-xl bg-primary/15 ring-1 ring-primary/30 px-5 py-4">
+                <p className="text-xs uppercase tracking-wide text-accent-foreground">Projected Revenue</p>
+                <p className="text-3xl font-semibold mt-1 font-money text-money-up">{fmtUSD(projectedRevenue)}</p>
+                <p className="text-xs text-muted-foreground mt-2">
+                  ({nActives} actives × <span className="font-money">{fmtUSD(dActive)}</span> + {nExpected} new pledges × <span className="font-money">{fmtUSD(dPledge)}</span>) × {Math.round(rate * 100)}%
                 </p>
               </div>
 

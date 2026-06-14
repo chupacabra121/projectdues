@@ -79,7 +79,7 @@ function RatesPlansEditor({ period }: { period: PeriodRow }) {
   };
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-5">
+    <section className="glass rounded-2xl p-5">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         Set rates
       </p>
@@ -114,7 +114,7 @@ function RatesPlansEditor({ period }: { period: PeriodRow }) {
                   setPlans(next);
                 }}
                 onBlur={() => savePlans(plans)}
-                className={`${selectCls} w-full pl-6`}
+                className={`${selectCls} font-money w-full pl-6`}
                 aria-label="Plan preset amount"
               />
             </div>
@@ -150,7 +150,7 @@ function RateField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onCommit}
-          className={`${selectCls} w-full pl-7`}
+          className={`${selectCls} font-money w-full pl-7`}
         />
       </div>
     </label>
@@ -178,7 +178,7 @@ function MemberSection({
   );
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-card">
+    <section className="glass overflow-hidden rounded-2xl">
       <div className="flex items-baseline justify-between gap-3 border-b border-border/60 px-5 py-3">
         <div>
           <h2 className="text-sm font-semibold text-foreground">
@@ -187,7 +187,7 @@ function MemberSection({
           </h2>
           <p className="text-xs text-muted-foreground">{hint}</p>
         </div>
-        <span className="text-sm font-semibold text-primary">{fmtUSD(subtotal)}</span>
+        <span className="font-money text-sm font-semibold text-primary">{fmtUSD(subtotal)}</span>
       </div>
       {members.length === 0 ? (
         <p className="px-5 py-4 text-sm text-muted-foreground/70">{empty}</p>
@@ -263,7 +263,7 @@ function MemberDuesRow({
           placeholder={String(defaultAmt)}
           onBlur={(e) => changeAmount(e.target.value)}
           aria-label="Dues amount"
-          className="w-full rounded-lg border border-input bg-background py-1.5 pl-5 pr-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
+          className="font-money w-full rounded-lg border border-input bg-background py-1.5 pl-5 pr-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
         />
       </div>
 
