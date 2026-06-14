@@ -67,17 +67,17 @@ export interface ForecastItem {
   date: string | null;
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
-  /** variable_expense only: 'active' | 'pledge' | 'member' — what `amount` is per. */
+  /** variable_expense only: 'brother' | 'pledge' | 'member' — what `amount` is per. */
   cost_basis?: string | null;
 }
 
 /** Per-person bases a variable cost can scale on. */
-export type CostBasis = "active" | "pledge" | "member";
+export type CostBasis = "brother" | "pledge" | "member";
 
 export function costBasisLabel(basis: string | null | undefined): string {
   if (basis === "pledge") return "pledge";
   if (basis === "member") return "person";
-  return "active member";
+  return "brother";
 }
 
 /** How many heads a variable cost applies to, for a given pledge-class size. */
@@ -89,7 +89,7 @@ export function variableHeadcount(
   const active = activeMemberCount(s);
   if (basis === "pledge") return Math.max(0, pledgeCount);
   if (basis === "member") return active + Math.max(0, pledgeCount);
-  return active; // 'active' (default)
+  return active; // 'brother' (default) — the full-member tier
 }
 
 /** A single variable-expense item's total at a given pledge-class size. */

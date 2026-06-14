@@ -69,9 +69,9 @@ function parseItemForm(formData: FormData): ParsedItem | null {
   const basisRaw = String(formData.get("cost_basis") ?? "");
   const cost_basis =
     type === "variable_expense"
-      ? ["active", "pledge", "member"].includes(basisRaw)
+      ? ["brother", "pledge", "member"].includes(basisRaw)
         ? basisRaw
-        : "active"
+        : "brother"
       : null;
 
   return {
@@ -196,6 +196,18 @@ export async function setActualAmount(formData: FormData): Promise<void> {
   getDb()
     .prepare("UPDATE budget_items SET actual_amount = ? WHERE id = ? AND user_id = ?")
     .run(actual, id, user.id);
+  revalidateAll();
+}
+
+/** Mark a fixed obligation paid / unpaid from the Bills-Due tracker. */
+export async function setBillPaid(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = Number(formData.get("id"));
+  if (!id) return;
+  const paid = String(formData.get("paid")) === "1" ? 1 : 0;
+  getDb()
+    .prepare("UPDATE budget_items SET paid = ? WHERE id = ? AND user_id = ?")
+    .run(paid, id, user.id);
   revalidateAll();
 }
 

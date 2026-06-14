@@ -10,6 +10,8 @@ export default async function ActualsPage() {
   if (!period) redirect("/periods");
   const items = getBudgetItems(user.id, period.id);
   const members = getMembers(user.id, period.id);
+  // Resolved on the server so the "due in N days" badges hydrate identically.
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   return (
     <AppShell chapterName={user.chapter_name} userId={user.id}>
@@ -27,7 +29,13 @@ export default async function ActualsPage() {
           .
         </p>
         {/* Remount on period change so inline actual inputs reset cleanly. */}
-        <Actuals key={period.id} period={period} items={items} members={members} />
+        <Actuals
+          key={period.id}
+          period={period}
+          items={items}
+          members={members}
+          todayIso={todayIso}
+        />
       </div>
     </AppShell>
   );

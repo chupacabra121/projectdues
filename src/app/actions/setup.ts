@@ -26,7 +26,7 @@ export interface OnboardingMember {
   name: string;
   email: string;
   phone: string;
-  status: "active" | "pledge";
+  status: "brother" | "pledge";
 }
 
 function clampInt(n: unknown, min = 0, max = 100000): number {
@@ -103,7 +103,7 @@ export async function completeOnboarding(
           name,
           String(m.email ?? "").trim().slice(0, 120),
           String(m.phone ?? "").trim().slice(0, 40),
-          m.status === "pledge" ? "pledge" : "active"
+          m.status === "pledge" ? "pledge" : "brother"
         );
       }
     }

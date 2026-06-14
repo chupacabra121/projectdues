@@ -25,7 +25,7 @@ export default function DuesBoard({
   period: PeriodRow;
 }) {
   const plans = period.dues_plans;
-  const actives = members.filter((m) => m.status === "active");
+  const brothers = members.filter((m) => m.status === "brother");
   const pledges = members.filter((m) => m.status === "pledge");
 
   return (
@@ -34,12 +34,12 @@ export default function DuesBoard({
 
       <div className="mt-6 space-y-5">
         <MemberSection
-          title="Active members"
+          title="Brothers"
           hint="Most pay full dues — put anyone on a plan or give them an individual amount."
-          members={actives}
+          members={brothers}
           setRate={period.active_dues}
           plans={plans}
-          empty="No active members on the roster yet."
+          empty="No brothers on the roster yet."
         />
         <MemberSection
           title="Pledges"
@@ -84,7 +84,7 @@ function RatesPlansEditor({ period }: { period: PeriodRow }) {
         Set rates
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <RateField label="Active dues" value={activeDues} onChange={setActiveDues} onCommit={saveRates} />
+        <RateField label="Brother dues" value={activeDues} onChange={setActiveDues} onCommit={saveRates} />
         <RateField label="Pledge dues" value={pledgeDues} onChange={setPledgeDues} onCommit={saveRates} />
       </div>
 

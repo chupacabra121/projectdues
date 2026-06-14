@@ -48,7 +48,7 @@ export function memberDuesAmount(
   activeRate: number,
   pledgeRate: number
 ): number {
-  if (status === "active") return memberEffectiveDues(aidPlan, aidAmount, plans, activeRate);
+  if (status === "brother") return memberEffectiveDues(aidPlan, aidAmount, plans, activeRate);
   if (status === "pledge") return memberEffectiveDues(aidPlan, aidAmount, plans, pledgeRate);
   return 0;
 }

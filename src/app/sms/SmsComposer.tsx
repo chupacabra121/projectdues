@@ -18,7 +18,7 @@ import type { MemberRow, PeriodRow } from "@/lib/db";
 import { fmtUSD } from "@/lib/forecast";
 import { memberEffectiveDues } from "@/lib/memberDues";
 
-type Audience = "everyone" | "unpaid" | "active" | "pledge" | "other";
+type Audience = "everyone" | "unpaid" | "brother" | "pledge" | "other";
 type ComposerMode = "broadcast" | "individual";
 type SmsTemplate = {
   id: string;
@@ -32,7 +32,7 @@ const textAreaCls =
 const audienceOptions: Array<{ value: Audience; label: string }> = [
   { value: "everyone", label: "Everyone" },
   { value: "unpaid", label: "Unpaid" },
-  { value: "active", label: "Active" },
+  { value: "brother", label: "Brothers" },
   { value: "pledge", label: "Pledges" },
   { value: "other", label: "Other" },
 ];
@@ -106,10 +106,10 @@ export default function SmsComposer({
           if (audience === "unpaid") {
             return (
               member.dues_paid !== 1 &&
-              (member.status === "active" || member.status === "pledge")
+              (member.status === "brother" || member.status === "pledge")
             );
           }
-          if (audience === "active") return member.status === "active";
+          if (audience === "brother") return member.status === "brother";
           if (audience === "pledge") return member.status === "pledge";
           return member.status === "alumni" || member.status === "inactive";
         }),
@@ -119,7 +119,7 @@ export default function SmsComposer({
   const unpaidRecipients = recipients.filter(
     (member) =>
       member.dues_paid !== 1 &&
-      (member.status === "active" || member.status === "pledge")
+      (member.status === "brother" || member.status === "pledge")
   );
   const expectedOpen = unpaidRecipients.reduce((sum, member) => {
     const setRate = member.status === "pledge" ? period.pledge_dues : period.active_dues;

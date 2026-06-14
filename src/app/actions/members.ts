@@ -13,11 +13,88 @@ function revalidateAll() {
 
 function parseStatus(v: unknown): MemberStatus {
   const s = String(v);
-  return (MEMBER_STATUSES.some((m) => m.value === s) ? s : "active") as MemberStatus;
+  return (MEMBER_STATUSES.some((m) => m.value === s) ? s : "brother") as MemberStatus;
 }
 
 function cleanContact(v: unknown, max = 120): string {
   return String(v ?? "").trim().slice(0, max);
+}
+
+export interface ImportMemberInput {
+  name: string;
+  email: string;
+  phone: string;
+  status: string;
+}
+
+export interface ImportSummary {
+  imported: number;
+  duplicates: number;
+  skipped: number;
+}
+
+/**
+ * Bulk-add members to the active period from an imported/pasted roster.
+ * Appends (never replaces) and de-duplicates against the existing roster —
+ * by email when present, otherwise by name — so re-importing is safe.
+ * `statusOverride`, when a valid category, forces every imported member to it;
+ * otherwise each row keeps its parsed status (defaulting to active).
+ */
+export async function importMembers(
+  rows: ImportMemberInput[],
+  statusOverride?: string
+): Promise<ImportSummary> {
+  const summary: ImportSummary = { imported: 0, duplicates: 0, skipped: 0 };
+  const user = await requireUser();
+  const period = getActivePeriod(user.id);
+  if (!period || !Array.isArray(rows)) return summary;
+
+  const db = getDb();
+  const existing = db
+    .prepare("SELECT name, email FROM members WHERE user_id = ? AND period_id = ?")
+    .all(user.id, period.id) as { name: string; email: string }[];
+  const seenEmails = new Set(
+    existing.map((e) => e.email.trim().toLowerCase()).filter(Boolean)
+  );
+  const seenNames = new Set(existing.map((e) => e.name.trim().toLowerCase()));
+
+  const override =
+    statusOverride && MEMBER_STATUSES.some((m) => m.value === statusOverride)
+      ? (statusOverride as MemberStatus)
+      : null;
+
+  const insert = db.prepare(
+    "INSERT INTO members (user_id, period_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  const run = db.transaction(() => {
+    for (const r of rows.slice(0, 5000)) {
+      const name = cleanContact(r?.name);
+      if (!name) {
+        summary.skipped++;
+        continue;
+      }
+      const email = cleanContact(r?.email);
+      const emailKey = email.toLowerCase();
+      const nameKey = name.toLowerCase();
+      // De-dup: prefer email match; fall back to an exact name match.
+      if (emailKey ? seenEmails.has(emailKey) : seenNames.has(nameKey)) {
+        summary.duplicates++;
+        continue;
+      }
+      const status = override ?? parseStatus(r?.status);
+      insert.run(user.id, period.id, name, email, cleanContact(r?.phone, 40), status);
+      if (emailKey) seenEmails.add(emailKey);
+      seenNames.add(nameKey);
+      summary.imported++;
+    }
+  });
+  run();
+
+  if (summary.imported > 0) {
+    recomputeDerivedDues(user.id, period.id);
+    revalidateAll();
+  }
+  return summary;
 }
 
 export async function addMember(formData: FormData): Promise<void> {
