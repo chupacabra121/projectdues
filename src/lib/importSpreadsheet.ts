@@ -10,7 +10,7 @@ export interface ImportedMember {
   name: string;
   email: string;
   phone: string;
-  status: "active" | "pledge";
+  status: "brother" | "pledge";
 }
 
 export interface ImportResult {
@@ -90,17 +90,25 @@ function findStatusColumn(
   return best?.col ?? null;
 }
 
-function rowsToResult(rows: Record<string, unknown>[]): ImportResult {
-  const empty: ImportResult = {
-    activeCount: 0,
-    pledgeCount: 0,
-    totalRows: 0,
-    statusColumn: null,
-    members: [],
-    emailCount: 0,
-    phoneCount: 0,
+/** Roll a list of parsed members into the summary shape the UI expects. */
+function aggregate(
+  members: ImportedMember[],
+  totalRows: number,
+  statusColumn: string | null
+): ImportResult {
+  return {
+    activeCount: members.filter((m) => m.status === "brother").length,
+    pledgeCount: members.filter((m) => m.status === "pledge").length,
+    totalRows,
+    statusColumn,
+    members,
+    emailCount: members.filter((m) => m.email).length,
+    phoneCount: members.filter((m) => m.phone).length,
   };
-  if (rows.length === 0) return empty;
+}
+
+function rowsToResult(rows: Record<string, unknown>[]): ImportResult {
+  if (rows.length === 0) return aggregate([], 0, null);
 
   const columns = Object.keys(rows[0]);
   const statusCol = findStatusColumn(rows, columns);
@@ -115,11 +123,11 @@ function rowsToResult(rows: Record<string, unknown>[]): ImportResult {
     let status: ImportedMember["status"];
     if (statusCol) {
       const s = val(row, statusCol);
-      if (ACTIVE_RE.test(s)) status = "active";
+      if (ACTIVE_RE.test(s)) status = "brother";
       else if (PLEDGE_RE.test(s)) status = "pledge";
       else continue; // unrecognized status (alumni, inactive, …) — skip
     } else {
-      status = "active"; // no status column: treat every row as active
+      status = "brother"; // no status column: treat every row as a brother
     }
 
     const email = val(row, emailCol);
@@ -136,15 +144,95 @@ function rowsToResult(rows: Record<string, unknown>[]): ImportResult {
     });
   }
 
-  return {
-    activeCount: members.filter((m) => m.status === "active").length,
-    pledgeCount: members.filter((m) => m.status === "pledge").length,
-    totalRows: rows.length,
-    statusColumn: statusCol,
-    members,
-    emailCount: members.filter((m) => m.email).length,
-    phoneCount: members.filter((m) => m.phone).length,
-  };
+  return aggregate(members, rows.length, statusCol);
+}
+
+/** Any header keyword — used to tell a header row from a data row when pasting. */
+const HEADER_ANY_RE = /name|e-?mail|phone|cell|mobile|status|first|last|surname|member|standing/i;
+
+/**
+ * Classify one delimited row when there's no header to map against. The name is
+ * the leading text cells (before any email/phone); a status word is honored
+ * whether it leads or trails; and any *trailing* extra columns (birthday,
+ * location, notes, …) are ignored so they never get mashed into the name.
+ */
+function classifyRow(rawCells: string[], i: number): ImportedMember | null {
+  const vals = rawCells.map((c) => String(c ?? "").trim()).filter(Boolean);
+  if (vals.length === 0) return null;
+
+  let email = "";
+  let phone = "";
+  let status: ImportedMember["status"] = "brother";
+  let statusSet = false;
+  const lead: string[] = []; // text cells before the first contact field = name
+  let sawContact = false;
+
+  for (const v of vals) {
+    if (!email && EMAIL_VALUE_RE.test(v)) {
+      email = v;
+      sawContact = true;
+    } else if (!phone && PHONE_VALUE_RE.test(v)) {
+      phone = v;
+      sawContact = true;
+    } else if (!statusSet && sawContact && (ACTIVE_RE.test(v) || PLEDGE_RE.test(v))) {
+      // a status word after the contact fields, e.g. "Jane, jane@x.com, pledge"
+      status = PLEDGE_RE.test(v) ? "pledge" : "brother";
+      statusSet = true;
+    } else if (!sawContact) {
+      lead.push(v);
+    }
+    // a trailing non-status extra column is intentionally dropped
+  }
+
+  // A leading status word ("Active, Bob, bob@x.com"), but never the only cell —
+  // so a name like "Brother Bob" isn't mistaken for a status.
+  let nameParts = lead;
+  if (!statusSet && lead.length > 1) {
+    const idx = lead.findIndex((v) => ACTIVE_RE.test(v) || PLEDGE_RE.test(v));
+    if (idx >= 0) {
+      status = PLEDGE_RE.test(lead[idx]) ? "pledge" : "brother";
+      nameParts = lead.filter((_, k) => k !== idx);
+    }
+  }
+
+  let name = nameParts.join(" ").trim();
+  if (!name) name = email ? email.split("@")[0] : `Member ${i + 1}`;
+  return { name, email, phone, status };
+}
+
+/**
+ * Parse pasted text — a column of names, comma/tab rows, or a copy out of
+ * Excel, with or without a header line. Mirrors parseRosterFile's output.
+ */
+export function parseRosterText(text: string): ImportResult {
+  const t = text.trim();
+  if (!t) return aggregate([], 0, null);
+
+  const grid = (Papa.parse<string[]>(t, { skipEmptyLines: "greedy" }).data || [])
+    .map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? "").trim()) : []))
+    .filter((r) => r.some(Boolean));
+  if (grid.length === 0) return aggregate([], 0, null);
+
+  // A header row has field names and no actual email/phone values in it.
+  const first = grid[0];
+  const looksHeader =
+    first.some((c) => HEADER_ANY_RE.test(c)) &&
+    !first.some((c) => EMAIL_VALUE_RE.test(c) || PHONE_VALUE_RE.test(c));
+
+  if (looksHeader) {
+    const parsed = Papa.parse<Record<string, unknown>>(t, {
+      header: true,
+      skipEmptyLines: "greedy",
+    });
+    return rowsToResult(parsed.data);
+  }
+
+  const members: ImportedMember[] = [];
+  grid.slice(0, 5000).forEach((cells, i) => {
+    const m = classifyRow(cells, i);
+    if (m) members.push(m);
+  });
+  return aggregate(members, grid.length, null);
 }
 
 export async function parseRosterFile(file: File): Promise<ImportResult> {

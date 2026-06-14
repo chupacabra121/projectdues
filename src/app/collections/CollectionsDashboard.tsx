@@ -51,7 +51,7 @@ export default function CollectionsDashboard({
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const billable = members
-    .filter((member) => member.status === "active" || member.status === "pledge")
+    .filter((member) => member.status === "brother" || member.status === "pledge")
     .map((member) => toCollectionMember(member, period));
   const selectedIds = useMemo(() => Array.from(selected), [selected]);
   const paid = billable.filter((member) => member.effectiveStage === "paid");
@@ -243,7 +243,7 @@ export default function CollectionsDashboard({
           </div>
           {billable.length === 0 ? (
             <p className="px-5 py-8 text-sm text-muted-foreground/70">
-              No active members or pledges to collect from.
+              No brothers or pledges to collect from.
             </p>
           ) : (
             <div className="divide-y divide-border/40">

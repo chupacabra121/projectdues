@@ -327,7 +327,7 @@ export default async function DashboardPage() {
                   Where a Member&apos;s Dues Go
                 </h3>
                 <p className="mb-4 mt-1 text-sm text-muted-foreground">
-                  Each active&apos;s {fmtUSD(settings.active_dues)}, split the
+                  Each brother&apos;s {fmtUSD(settings.active_dues)}, split the
                   way the semester&apos;s money is planned — paste it in the
                   chapter group chat.
                 </p>

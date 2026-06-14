@@ -121,7 +121,7 @@ const CARRY_OPTIONS = [
   },
   {
     name: "promote_pledges",
-    label: "Promote pledges to actives",
+    label: "Promote pledges to brothers",
     hint: "Last semester's pledge class initiates into the new roster",
     default: true,
   },

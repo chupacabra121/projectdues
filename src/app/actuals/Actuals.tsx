@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { setActualAmount } from "@/app/actions/budget";
+import { setActualAmount, setBillPaid } from "@/app/actions/budget";
 import { BudgetItemRow, MemberRow, PeriodRow } from "@/lib/db";
 import { buildForecast, fmtUSD, fmtDate, occurrences } from "@/lib/forecast";
 import { memberDuesAmount } from "@/lib/memberDues";
@@ -10,21 +10,21 @@ export default function Actuals({
   period,
   items,
   members,
+  todayIso,
 }: {
   period: PeriodRow;
   items: BudgetItemRow[];
   members: MemberRow[];
+  todayIso: string;
 }) {
-  // Per-item actual tracking covers flat expenses and events. Per-member
-  // variable costs are predictable (rate × headcount), so they're rolled into
-  // the forecast totals rather than tracked line by line here.
-  const expenses = items.filter(
-    (i) => i.type === "fixed_expense" || i.type === "planned_event"
-  );
+  // Events are where plan and actual actually diverge — a formal runs over, an
+  // extra mixer gets added. Fixed obligations bill at a set amount and per-member
+  // costs are predictable (rate × headcount), so neither is tracked line-by-line.
+  const events = items.filter((i) => i.type === "planned_event");
   const otherIncome = items.filter((i) => i.type === "other_income");
 
   // Planned vs actual on the spending side, computed on semester totals.
-  const recorded = expenses.filter((i) => i.actual_amount != null);
+  const recorded = events.filter((i) => i.actual_amount != null);
   const actualRecorded = recorded.reduce(
     (s, i) => s + i.actual_amount! * occurrences(i, period),
     0
@@ -34,6 +34,27 @@ export default function Actuals({
     0
   );
   const spendVariance = actualRecorded - plannedForRecorded;
+
+  // Bills due vs paid — the fixed obligations (national fees, insurance, …).
+  // Unpaid sort to the top, soonest/overdue first; paid drop to the bottom.
+  const bills = items.filter((i) => i.type === "fixed_expense");
+  const billCost = (i: BudgetItemRow) => i.amount * occurrences(i, period);
+  const billsTotal = bills.reduce((s, i) => s + billCost(i), 0);
+  const billsPaid = bills
+    .filter((i) => i.paid === 1)
+    .reduce((s, i) => s + billCost(i), 0);
+  const billsOutstanding = Math.max(0, billsTotal - billsPaid);
+  const nextBill =
+    bills
+      .filter((i) => i.paid !== 1 && i.date)
+      .sort((a, b) => (a.date! < b.date! ? -1 : 1))[0] ?? null;
+  const unpaidCount = bills.filter((i) => i.paid !== 1).length;
+  const sortedBills = [...bills].sort((a, b) => {
+    if ((a.paid === 1) !== (b.paid === 1)) return a.paid === 1 ? 1 : -1;
+    if (!a.date) return b.date ? 1 : 0;
+    if (!b.date) return -1;
+    return a.date < b.date ? -1 : a.date > b.date ? 1 : 0;
+  });
 
   // Income side: billed (full roster obligation) vs collected (paid checkboxes).
   const duesOf = (m: MemberRow) =>
@@ -46,9 +67,9 @@ export default function Actuals({
       period.pledge_dues
     );
   const dueMembers = members.filter(
-    (m) => m.status === "active" || m.status === "pledge"
+    (m) => m.status === "brother" || m.status === "pledge"
   );
-  const activeMembers = members.filter((m) => m.status === "active");
+  const brotherMembers = members.filter((m) => m.status === "brother");
   const pledgeMembers = members.filter((m) => m.status === "pledge");
   const billed = dueMembers.reduce((s, m) => s + duesOf(m), 0);
   const collected = dueMembers
@@ -76,12 +97,12 @@ export default function Actuals({
       {/* Summary */}
       <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <SummaryCard
-          label="Spending Recorded"
+          label="Event Spending Recorded"
           value={fmtUSD(actualRecorded)}
           sub={
             recorded.length === 0
-              ? `0 of ${expenses.length} items recorded`
-              : `${recorded.length} of ${expenses.length} items · ${spendVariance >= 0 ? "+" : "−"}${fmtUSD(Math.abs(spendVariance))} vs plan`
+              ? `0 of ${events.length} events recorded`
+              : `${recorded.length} of ${events.length} events · ${spendVariance >= 0 ? "+" : "−"}${fmtUSD(Math.abs(spendVariance))} vs plan`
           }
           tone={
             recorded.length === 0
@@ -105,13 +126,14 @@ export default function Actuals({
         />
       </section>
 
-      {/* Expenses — planned vs actual */}
+      {/* Events — planned vs actual */}
       <section className="glass mb-6 overflow-hidden rounded-[1.5rem]">
         <div className="border-b border-border/60 px-6 pb-4 pt-6">
-          <h2 className="font-semibold text-foreground">Expenses — planned vs actual</h2>
+          <h2 className="font-semibold text-foreground">Events — planned vs actual</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Record what each obligation and event really cost. Penny rolls the
-            variance into your forecast and dashboard.
+            Record what each event really cost — the formal that ran over, the
+            mixer you added. Penny rolls the variance into your forecast and
+            dashboard. Fixed bills don&apos;t vary, so they stay on the Budget.
           </p>
         </div>
 
@@ -122,18 +144,69 @@ export default function Actuals({
           <span className="text-right">Variance</span>
         </div>
 
-        {expenses.length === 0 ? (
+        {events.length === 0 ? (
           <p className="px-6 py-8 text-center text-sm text-muted-foreground/70">
-            No obligations or events yet — add them on the Budget tab first.
+            No events yet — plan them on the Budget tab first.
           </p>
         ) : (
           <div className="divide-y divide-border/40">
-            {expenses.map((item) => (
+            {events.map((item) => (
               <ExpenseRow key={item.id} item={item} period={period} />
             ))}
           </div>
         )}
       </section>
+
+      {/* Bills — due vs paid (the fixed obligations: national fees, insurance…) */}
+      {bills.length > 0 && (
+        <section className="glass mb-6 overflow-hidden rounded-[1.5rem]">
+          <div className="border-b border-border/60 px-6 pb-4 pt-6">
+            <h2 className="font-semibold text-foreground">Bills — due vs paid</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your fixed obligations, sorted by what&apos;s due next. Check each
+              one off as you clear it with HQ.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-3 divide-x divide-border/60 border-b border-border/60">
+            <Stat
+              label="Total Due"
+              value={fmtUSD(billsTotal)}
+              sub={`${bills.length} bill${bills.length === 1 ? "" : "s"}`}
+            />
+            <Stat
+              label="Paid"
+              value={fmtUSD(billsPaid)}
+              sub={`${bills.length - unpaidCount} of ${bills.length} cleared`}
+              tone="good"
+            />
+            <Stat
+              label="Outstanding"
+              value={fmtUSD(billsOutstanding)}
+              sub={
+                nextBill
+                  ? `next: ${nextBill.name} · ${billStatus(nextBill.date, false, todayIso).label}`
+                  : unpaidCount === 0
+                    ? "all paid 🎉"
+                    : `${unpaidCount} unpaid`
+              }
+              tone={billsOutstanding > 0 ? "bad" : "good"}
+            />
+          </div>
+
+          <div className="hidden grid-cols-[1.5rem_1.7fr_1fr_1fr] gap-3 px-6 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid">
+            <span />
+            <span>Bill</span>
+            <span>Status</span>
+            <span className="text-right">Amount</span>
+          </div>
+          <div className="divide-y divide-border/40">
+            {sortedBills.map((item) => (
+              <BillRow key={item.id} item={item} period={period} todayIso={todayIso} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Dues — billed vs collected (from the per-member paid checkboxes) */}
       <section className="glass mb-6 overflow-hidden rounded-[1.5rem]">
@@ -151,7 +224,7 @@ export default function Actuals({
           <Stat
             label="Billed"
             value={fmtUSD(billed)}
-            sub={`${activeMembers.length} actives + ${pledgeMembers.length} pledges`}
+            sub={`${brotherMembers.length} brothers + ${pledgeMembers.length} pledges`}
           />
           <Stat label="Collected" value={fmtUSD(collected)} sub={`${actualCollectedPct}% of billed`} tone="good" />
           <Stat
@@ -194,7 +267,7 @@ export default function Actuals({
                   <span className="truncate text-foreground">
                     {m.name}
                     <span className="ml-2 text-xs text-muted-foreground">
-                      {m.status === "pledge" ? "pledge" : "active"}
+                      {m.status === "pledge" ? "pledge" : "brother"}
                     </span>
                   </span>
                   <span className="font-money font-medium text-money-down">{fmtUSD(m.amount)}</span>
@@ -428,5 +501,106 @@ function VarianceCell({
       {positive ? "+" : "−"}
       {fmtUSD(Math.abs(delta))}
     </span>
+  );
+}
+
+type BillTone = "paid" | "overdue" | "soon" | "neutral";
+
+/** Whole-day difference between a due date and today (both YYYY-MM-DD). */
+function daysUntil(dueIso: string, todayIso: string): number {
+  const due = Date.parse(dueIso + "T00:00:00");
+  const today = Date.parse(todayIso + "T00:00:00");
+  if (isNaN(due) || isNaN(today)) return 0;
+  return Math.round((due - today) / 86_400_000);
+}
+
+/** A bill's status badge — paid, overdue, due-soon, or a future/undated date. */
+function billStatus(
+  dueIso: string | null,
+  paid: boolean,
+  todayIso: string
+): { label: string; tone: BillTone } {
+  if (paid) return { label: "Paid", tone: "paid" };
+  if (!dueIso) return { label: "No due date", tone: "neutral" };
+  const days = daysUntil(dueIso, todayIso);
+  if (days < 0) return { label: `Overdue ${-days}d`, tone: "overdue" };
+  if (days === 0) return { label: "Due today", tone: "soon" };
+  if (days <= 14) return { label: `Due in ${days}d`, tone: "soon" };
+  return { label: `Due ${fmtDate(dueIso)}`, tone: "neutral" };
+}
+
+const BILL_BADGE: Record<BillTone, string> = {
+  paid: "bg-muted text-muted-foreground",
+  overdue: "bg-destructive/10 text-money-down",
+  soon: "bg-warning/10 text-warning",
+  neutral: "bg-muted text-muted-foreground",
+};
+
+/** One bill: a paid checkbox, the obligation + due date, a status badge, amount. */
+function BillRow({
+  item,
+  period,
+  todayIso,
+}: {
+  item: BudgetItemRow;
+  period: PeriodRow;
+  todayIso: string;
+}) {
+  const [isPending, startTransition] = useTransition();
+  const paid = item.paid === 1;
+  const n = occurrences(item, period);
+  const amount = item.amount * n;
+  const status = billStatus(item.date, paid, todayIso);
+
+  function toggle() {
+    const fd = new FormData();
+    fd.set("id", String(item.id));
+    fd.set("paid", paid ? "0" : "1");
+    startTransition(() => setBillPaid(fd));
+  }
+
+  return (
+    <div
+      className={`grid grid-cols-[1.5rem_1.7fr_1fr_1fr] items-center gap-3 px-6 py-3 transition-opacity ${
+        paid ? "opacity-60" : ""
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={paid}
+        disabled={isPending}
+        onChange={toggle}
+        aria-label={`Mark ${item.name} paid`}
+        className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+      />
+      <div className="min-w-0">
+        <div className="flex items-center gap-2">
+          <p
+            className={`truncate text-sm font-medium text-foreground ${
+              paid ? "line-through decoration-muted-foreground/40" : ""
+            }`}
+          >
+            {item.name}
+          </p>
+          <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+            {item.category}
+          </span>
+        </div>
+        {item.date && (
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Due {fmtDate(item.date)}
+            {n > 1 && ` · monthly ×${n}`}
+          </p>
+        )}
+      </div>
+      <span
+        className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-xs font-medium ${BILL_BADGE[status.tone]}`}
+      >
+        {status.label}
+      </span>
+      <p className="font-money text-right text-sm font-medium text-foreground">
+        {fmtUSD(amount)}
+      </p>
+    </div>
   );
 }

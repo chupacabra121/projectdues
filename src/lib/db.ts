@@ -69,7 +69,7 @@ function createDb(): Database.Database {
       name TEXT NOT NULL,
       email TEXT NOT NULL DEFAULT '',
       phone TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pledge', 'alumni', 'inactive', 'trash')),
+      status TEXT NOT NULL DEFAULT 'brother' CHECK (status IN ('brother', 'pledge', 'alumni', 'inactive', 'trash')),
       aid_plan INTEGER,
       aid_amount REAL,
       dues_paid INTEGER NOT NULL DEFAULT 0,
@@ -116,8 +116,10 @@ function createDb(): Database.Database {
   `);
   migrateBudgetItemTypes(db);
   migrateMemberStatuses(db);
+  migrateMemberBrotherStatus(db);
   addColumnIfMissing(db, "budget_items", "actual_amount", "REAL");
   addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
+  addColumnIfMissing(db, "budget_items", "paid", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "settings", "dues_schedule", "TEXT NOT NULL DEFAULT 'sixweek'");
   addColumnIfMissing(db, "settings", "active_period_id", "INTEGER");
   addColumnIfMissing(db, "budget_items", "period_id", "INTEGER");
@@ -393,6 +395,74 @@ function migrateMemberStatuses(db: Database.Database) {
   `);
 }
 
+/** Rename the "active" member status to "brother": "Actives" is now a derived
+ * umbrella (brothers + pledges), not a stored status. SQLite can't alter a CHECK
+ * in place, so rebuild the members table mapping active -> brother (same shape as
+ * migrateMemberStatuses), and rename any 'active' variable-cost basis too. */
+function migrateMemberBrotherStatus(db: Database.Database) {
+  const row = db
+    .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='members'")
+    .get() as { sql: string } | undefined;
+  if (!row) return;
+  // Gate on 'brother' being PRESENT, not on 'active' being absent — the CHECK
+  // list still contains 'inactive', which has "active" as a substring.
+  if (row.sql.includes("'brother'")) return;
+
+  const existing = new Set(
+    (db.prepare("PRAGMA table_info(members)").all() as { name: string }[]).map(
+      (c) => c.name
+    )
+  );
+  const required = ["id", "user_id", "name", "email", "phone", "status", "created_at"];
+  const optional = [
+    "aid_plan",
+    "aid_amount",
+    "dues_paid",
+    "collection_stage",
+    "contact_count",
+    "last_contacted_at",
+    "last_contact_channel",
+    "period_id",
+  ].filter((c) => existing.has(c));
+  const cols = [...required, ...optional];
+  const copyCols = cols.join(", ");
+  // Remap the status value in flight; every other column copies straight across.
+  const selectCols = cols
+    .map((c) =>
+      c === "status"
+        ? "CASE status WHEN 'active' THEN 'brother' ELSE status END AS status"
+        : c
+    )
+    .join(", ");
+
+  db.exec(`
+    BEGIN;
+    CREATE TABLE members_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      name TEXT NOT NULL,
+      email TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'brother' CHECK (status IN ('brother', 'pledge', 'alumni', 'inactive', 'trash')),
+      aid_plan INTEGER,
+      aid_amount REAL,
+      dues_paid INTEGER NOT NULL DEFAULT 0,
+      collection_stage TEXT NOT NULL DEFAULT 'not_contacted',
+      contact_count INTEGER NOT NULL DEFAULT 0,
+      last_contacted_at TEXT,
+      last_contact_channel TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      period_id INTEGER
+    );
+    INSERT INTO members_new (${copyCols}) SELECT ${selectCols} FROM members;
+    DROP TABLE members;
+    ALTER TABLE members_new RENAME TO members;
+    CREATE INDEX IF NOT EXISTS idx_members_user ON members(user_id);
+    UPDATE budget_items SET cost_basis = 'brother' WHERE cost_basis = 'active';
+    COMMIT;
+  `);
+}
+
 export function getDb(): Database.Database {
   if (!global.__simpleduesDb) global.__simpleduesDb = createDb();
   return global.__simpleduesDb;
@@ -419,6 +489,8 @@ export interface PeriodRow {
   name: string;
   semester_start: string;
   semester_end: string;
+  // `active_*` = the full-dues BROTHER tier (the field names predate the
+  // brother rename). "Actives" in the UI is a derived brothers+pledges umbrella.
   active_members: number;
   current_pledges: number;
   pledges_conservative: number;
@@ -449,9 +521,11 @@ export interface BudgetItemRow {
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
   attendance: number | null;
-  /** For variable_expense: 'active' | 'pledge' | 'member' — what `amount` is per. */
+  /** For variable_expense: 'brother' | 'pledge' | 'member' — what `amount` is per. */
   cost_basis: string | null;
   notes: string;
+  /** 1 once a fixed obligation has been paid (the Bills-Due tracker checkbox). */
+  paid: number;
 }
 
 /** Default semester window based on today's date (fall: Aug–Dec, spring: Jan–May). */
@@ -522,9 +596,10 @@ export function recomputeDerivedDues(userId: number, periodId: number): void {
   const plans = parseDuesPlans(period.dues_plans);
   const activeRate = Math.max(0, Number(period.active_dues) || 0);
   const pledgeRate = Math.max(0, Number(period.pledge_dues) || 0);
+  // The dues-paying tiers — "Actives" = brothers (full rate) + pledges.
   const members = db
     .prepare(
-      "SELECT name, status, aid_plan, aid_amount, dues_paid FROM members WHERE user_id = ? AND period_id = ? AND status IN ('active','pledge')"
+      "SELECT name, status, aid_plan, aid_amount, dues_paid FROM members WHERE user_id = ? AND period_id = ? AND status IN ('brother','pledge')"
     )
     .all(userId, periodId) as {
     name: string;
@@ -539,28 +614,29 @@ export function recomputeDerivedDues(userId: number, periodId: number): void {
       m.aid_plan,
       m.aid_amount,
       plans,
-      m.status === "active" ? activeRate : pledgeRate
+      m.status === "brother" ? activeRate : pledgeRate
     );
 
-  // Active-dues breakdown: anyone with a plan or an override is priced
-  // individually; the rest pay the flat rate (fullCount × fullRate).
-  const actives = members.filter((m) => m.status === "active");
-  const aid = actives
+  // Full-dues (brother) breakdown: anyone with a plan or an override is priced
+  // individually; the rest pay the flat rate (fullCount × fullRate). The
+  // active_* period fields hold this brother tier (see recomputeDerivedDues docs).
+  const brothers = members.filter((m) => m.status === "brother");
+  const aid = brothers
     .filter((m) => m.aid_plan != null || m.aid_amount != null)
     .map((m) => ({
       name: m.name,
       amount: memberEffectiveDues(m.aid_plan, m.aid_amount, plans, activeRate),
     }));
-  const breakdown = { fullCount: actives.length - aid.length, fullRate: activeRate, aid };
+  const breakdown = { fullCount: brothers.length - aid.length, fullRate: activeRate, aid };
 
-  // Collected = the dues of everyone checked off (actives and pledges alike).
+  // Collected = the dues of everyone checked off (brothers and pledges alike).
   const collected = members
     .filter((m) => m.dues_paid === 1)
     .reduce((sum, m) => sum + duesOf(m), 0);
 
   db.prepare(
     "UPDATE periods SET active_members = ?, active_dues_breakdown = ?, dues_collected = ? WHERE id = ? AND user_id = ?"
-  ).run(actives.length, JSON.stringify(breakdown), collected, periodId, userId);
+  ).run(brothers.length, JSON.stringify(breakdown), collected, periodId, userId);
 }
 
 export function getPeriods(userId: number): PeriodRow[] {

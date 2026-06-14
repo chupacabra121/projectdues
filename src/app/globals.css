@@ -283,13 +283,24 @@
     0 12px 32px -12px oklch(0 0 0 / 0.7);
 }
 
-/* ── Graph-paper substrate — 28px engineering grid, edge-masked, both themes ─ */
+/* ── Graph-paper substrate — 28px engineering grid, both themes. ────────────
+   The grid + its fade live on a ::before layer behind the content. The mask
+   must NEVER touch the content element itself — masking <main> would fade the
+   page (and everything in it) to transparent toward the bottom. */
 .grid-substrate {
+  position: relative;
+}
+.grid-substrate::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image:
     repeating-linear-gradient(0deg, transparent 0 27px, var(--grid-line) 27px 28px),
     repeating-linear-gradient(90deg, transparent 0 27px, var(--grid-line) 27px 28px);
-  -webkit-mask-image: radial-gradient(120% 90% at 50% 0%, #000 55%, transparent 100%);
-          mask-image: radial-gradient(120% 90% at 50% 0%, #000 55%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 120px, #000 calc(100% - 160px), transparent 100%);
+          mask-image: linear-gradient(to bottom, transparent 0, #000 120px, #000 calc(100% - 160px), transparent 100%);
 }
 
 /* ── Signature flourishes ───────────────────────────────────────────────── */

@@ -94,8 +94,8 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
         {isVariable ? (
           <div>
             <label className={labelCls}>Per</label>
-            <select name="cost_basis" className={inputCls} defaultValue={item?.cost_basis ?? "active"}>
-              <option value="active">Active member</option>
+            <select name="cost_basis" className={inputCls} defaultValue={item?.cost_basis ?? "brother"}>
+              <option value="brother">Brother</option>
               <option value="pledge">Pledge</option>
               <option value="member">Everyone</option>
             </select>

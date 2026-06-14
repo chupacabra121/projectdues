@@ -182,11 +182,11 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               <p className="text-sm text-muted-foreground mb-6">
                 {importResult.statusColumn
                   ? `Detected member status from the “${importResult.statusColumn}” column.`
-                  : "We couldn't find a status column, so we counted every row as an active member. You can adjust the numbers next."}
+                  : "We couldn't find a status column, so we counted every row as a brother. You can adjust the numbers next."}
               </p>
               <div className="space-y-3 mb-4">
                 <div className="flex items-center justify-between rounded-xl bg-primary/10 border border-primary/20 px-4 py-3.5">
-                  <span className="text-sm font-medium text-accent-foreground">Active Members</span>
+                  <span className="text-sm font-medium text-accent-foreground">Brothers</span>
                   <span className="text-lg font-semibold text-primary font-money">{importResult.activeCount}</span>
                 </div>
                 <div className="flex items-center justify-between rounded-xl glass px-4 py-3.5">
@@ -224,7 +224,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               </p>
               <div className="space-y-4">
                 <div>
-                  <label className={labelCls}>Number of Active Members</label>
+                  <label className={labelCls}>Number of Brothers</label>
                   <input
                     type="number" min={0} className={inputCls} placeholder="43"
                     value={actives} onChange={(e) => setActives(e.target.value)}
@@ -264,7 +264,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className={labelCls}>Active Member Dues</label>
+                    <label className={labelCls}>Brother Dues</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-sm">$</span>
                       <input
@@ -300,7 +300,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                 <p className="text-xs uppercase tracking-wide text-accent-foreground">Projected Revenue</p>
                 <p className="text-3xl font-semibold mt-1 font-money text-money-up">{fmtUSD(projectedRevenue)}</p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  ({nActives} actives × <span className="font-money">{fmtUSD(dActive)}</span> + {nExpected} new pledges × <span className="font-money">{fmtUSD(dPledge)}</span>) × {Math.round(rate * 100)}%
+                  ({nActives} brothers × <span className="font-money">{fmtUSD(dActive)}</span> + {nExpected} new pledges × <span className="font-money">{fmtUSD(dPledge)}</span>) × {Math.round(rate * 100)}%
                 </p>
               </div>
 

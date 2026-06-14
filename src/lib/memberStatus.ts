@@ -6,7 +6,7 @@
  */
 
 export type MemberStatus =
-  | "active"
+  | "brother"
   | "pledge"
   | "alumni"
   | "inactive"
@@ -22,9 +22,19 @@ export const MEMBER_STATUSES: {
   label: string;
   plural: string;
 }[] = [
-  { value: "active", label: "Active", plural: "Actives" },
+  { value: "brother", label: "Brother", plural: "Brothers" },
   { value: "pledge", label: "Pledge", plural: "Pledges" },
   { value: "alumni", label: "Alumni", plural: "Alumni" },
   { value: "inactive", label: "Inactive", plural: "Inactive" },
   { value: "trash", label: "Trash", plural: "Trash" },
 ];
+
+/**
+ * "Actives" is a derived umbrella — everyone currently active in the chapter,
+ * i.e. initiated Brothers plus uninitiated Pledges (as opposed to Alumni /
+ * Inactive). It is NOT a stored status; compute it from these.
+ */
+export const ACTIVE_STATUSES: MemberStatus[] = ["brother", "pledge"];
+
+export const isActiveMember = (s: MemberStatus): boolean =>
+  s === "brother" || s === "pledge";

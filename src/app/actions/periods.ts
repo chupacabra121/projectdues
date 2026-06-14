@@ -116,7 +116,7 @@ export async function createPeriod(formData: FormData): Promise<void> {
         "INSERT INTO members (user_id, period_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?)"
       );
       for (const m of members) {
-        const status = promotePledges ? "active" : m.status;
+        const status = promotePledges ? "brother" : m.status;
         insert.run(user.id, pid, m.name, m.email, m.phone, status);
       }
       // Sync the headcount to the carried roster — but only when rows were
@@ -126,7 +126,7 @@ export async function createPeriod(formData: FormData): Promise<void> {
       if (members.length > 0) {
         const counts = db
           .prepare(
-            "SELECT SUM(status='active') AS a, SUM(status='pledge') AS p FROM members WHERE user_id = ? AND period_id = ?"
+            "SELECT SUM(status='brother') AS a, SUM(status='pledge') AS p FROM members WHERE user_id = ? AND period_id = ?"
           )
           .get(user.id, pid) as { a: number; p: number };
         db.prepare(

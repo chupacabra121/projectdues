@@ -23,8 +23,6 @@ interface MoneyInState {
   optimistic: string;
   startingBalance: string;
   reserveTarget: string;
-  semesterStart: string;
-  semesterEnd: string;
 }
 
 const num = (s: string) => {
@@ -66,8 +64,6 @@ export default function Workbench({
     optimistic: String(settings.pledges_optimistic),
     startingBalance: String(settings.starting_balance),
     reserveTarget: String(settings.reserve_target),
-    semesterStart: settings.semester_start,
-    semesterEnd: settings.semester_end,
   });
   const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
   const [, startTransition] = useTransition();
@@ -100,11 +96,21 @@ export default function Workbench({
       starting_balance: num(s.startingBalance),
       dues_collected: settings.dues_collected,
       reserve_target: num(s.reserveTarget),
-      semester_start: s.semesterStart,
-      semester_end: s.semesterEnd,
+      // The semester window belongs to the period (edited in Manage periods),
+      // not the Budget tab — read it straight through for the forecast math.
+      semester_start: settings.semester_start,
+      semester_end: settings.semester_end,
       dues_schedule: settings.dues_schedule,
     };
-  }, [s, settings.current_pledges, settings.dues_collected, settings.dues_schedule, bd]);
+  }, [
+    s,
+    settings.current_pledges,
+    settings.dues_collected,
+    settings.dues_schedule,
+    settings.semester_start,
+    settings.semester_end,
+    bd,
+  ]);
 
   const forecast = useMemo(
     () => buildForecast(live, items, caps),
@@ -183,17 +189,14 @@ export default function Workbench({
         left={left}
       />
 
-      {/* Starting point — set-once context that seeds the waterfall */}
+      {/* Starting point — set-once context that seeds the waterfall. The
+          semester window is owned by the period (set in Manage periods). */}
       <section className="glass glass-lift mb-5 rounded-2xl p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Field label="In the bank now" value={s.startingBalance}
             onChange={set("startingBalance")} prefix="$" />
           <Field label="Reserve to keep" value={s.reserveTarget}
             onChange={set("reserveTarget")} prefix="$" />
-          <Field label="Semester start" value={s.semesterStart}
-            onChange={set("semesterStart")} type="date" />
-          <Field label="Semester end" value={s.semesterEnd}
-            onChange={set("semesterEnd")} type="date" />
         </div>
       </section>
 
@@ -817,7 +820,7 @@ function ActiveDuesGroup({
   return (
     <div className="rounded-2xl border border-border bg-background p-4">
       <div className="mb-3 flex items-baseline justify-between gap-2">
-        <p className="text-sm font-semibold text-foreground">Active members</p>
+        <p className="text-sm font-semibold text-foreground">Brothers</p>
         <p className="font-money text-base font-semibold text-foreground">
           {fmtUSD(fullSubtotal + aidSubtotal)}
         </p>
@@ -863,7 +866,7 @@ function ActiveDuesGroup({
         href="/dues"
         className="mt-3 flex items-center justify-center gap-1 border-t border-border/60 pt-3 text-xs font-medium text-accent-foreground transition-colors hover:underline"
       >
-        {`${totalMembers} active members · manage dues & financial aid →`}
+        {`${totalMembers} brothers · manage dues & financial aid →`}
       </Link>
     </div>
   );

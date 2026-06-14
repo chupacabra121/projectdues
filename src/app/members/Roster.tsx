@@ -5,18 +5,21 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { BellRing, RotateCcw, Trash2 } from "lucide-react";
 import { addMember, updateMember, setMemberStatus } from "@/app/actions/members";
 import { MemberRow } from "@/lib/db";
-import { MemberStatus, MEMBER_STATUSES } from "@/lib/memberStatus";
+import { MemberStatus, MEMBER_STATUSES, isActiveMember } from "@/lib/memberStatus";
 import { inputCls } from "@/components/AuthShell";
+import { ImportMembersButton } from "./ImportMembers";
 
-type Filter = "all" | MemberStatus;
+// "Actives" is a derived umbrella — Brothers + Pledges — not a stored category.
+type Filter = "all" | "actives" | MemberStatus;
 
 const FILTERS: Array<{ key: Filter; label: string }> = [
   { key: "all", label: "All" },
+  { key: "actives", label: "Actives" },
   ...MEMBER_STATUSES.map((s) => ({ key: s.value, label: s.plural })),
 ];
 
 const STATUS_BADGE: Record<MemberStatus, string> = {
-  active: "bg-primary/10 text-accent-foreground",
+  brother: "bg-primary/10 text-accent-foreground",
   pledge: "bg-secondary text-secondary-foreground",
   alumni: "bg-muted text-foreground",
   inactive: "bg-muted/60 text-muted-foreground",
@@ -47,7 +50,9 @@ export default function Roster({ members }: { members: MemberRow[] }) {
     () =>
       filter === "all"
         ? members.filter((m) => m.status !== "trash")
-        : members.filter((m) => m.status === filter),
+        : filter === "actives"
+          ? members.filter((m) => isActiveMember(m.status))
+          : members.filter((m) => m.status === filter),
     [members, filter]
   );
 
@@ -56,6 +61,8 @@ export default function Roster({ members }: { members: MemberRow[] }) {
     n: members.filter((m) => m.status === s.value).length,
   }));
   const rosterCount = members.filter((m) => m.status !== "trash").length;
+  // "Actives" = Brothers + Pledges (the chapter's current dues-paying members).
+  const activesCount = members.filter((m) => isActiveMember(m.status)).length;
 
   // Auto-dismiss the undo toast.
   useEffect(() => {
@@ -75,7 +82,7 @@ export default function Roster({ members }: { members: MemberRow[] }) {
     setToast({ id: m.id, name: m.name, prevStatus: m.status });
     moveStatus(m.id, "trash");
   };
-  const restoreMember = (m: MemberRow) => moveStatus(m.id, "active");
+  const restoreMember = (m: MemberRow) => moveStatus(m.id, "brother");
   const undoTrash = () => {
     if (!toast) return;
     moveStatus(toast.id, toast.prevStatus);
@@ -129,6 +136,13 @@ export default function Roster({ members }: { members: MemberRow[] }) {
         </p>
         <p className="whitespace-nowrap text-sm text-muted-foreground">
           {rosterCount} {rosterCount === 1 ? "member" : "members"}
+          {activesCount > 0 && (
+            <>
+              {" · "}
+              <span className="font-medium text-foreground">{activesCount}</span>{" "}
+              active{activesCount === 1 ? "" : "s"}
+            </>
+          )}
         </p>
       </div>
 
@@ -194,7 +208,8 @@ export default function Roster({ members }: { members: MemberRow[] }) {
           ))}
         </div>
         <div className="flex-1" />
-        {copied && <span className="text-sm text-primary">{copied}</span>}
+        {copied && <span className="text-sm text-money-up">{copied}</span>}
+        <ImportMembersButton />
         <button
           onClick={() => copy("emails")}
           className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted"
@@ -234,7 +249,7 @@ export default function Roster({ members }: { members: MemberRow[] }) {
         {filtered.length === 0 && (
           <p className="py-8 text-center text-sm text-muted-foreground/70">
             {members.length === 0
-              ? "No members yet — add them below."
+              ? "No members yet — add them below, or Import a list up top."
               : filter === "trash"
                 ? "Trash is empty."
                 : "No members in this category."}
@@ -376,7 +391,7 @@ function MemberLine({
               onRestore(member);
             }}
             className="text-muted-foreground/50 transition-colors hover:text-primary"
-            title="Restore to Active"
+            title="Restore to Brother"
             aria-label="Restore member"
           >
             <RotateCcw className="h-4 w-4" />
@@ -417,7 +432,7 @@ function AddMemberLine() {
       <input name="name" required placeholder="Add member — name" className={inputCls} />
       <input name="email" type="email" placeholder="email (optional)" className={inputCls} />
       <input name="phone" placeholder="phone (optional)" className={inputCls} />
-      <select name="status" defaultValue="active" className={inputCls}>
+      <select name="status" defaultValue="brother" className={inputCls}>
         {ADD_STATUSES.map((s) => (
           <option key={s.value} value={s.value}>
             {s.label}
