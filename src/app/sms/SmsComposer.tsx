@@ -16,7 +16,7 @@ import {
 } from "@/app/actions/collections";
 import type { MemberRow, PeriodRow } from "@/lib/db";
 import { fmtUSD } from "@/lib/forecast";
-import { memberEffectiveDues } from "@/lib/memberDues";
+import { memberEffectiveDues, memberSetRate, isBillableMember } from "@/lib/memberDues";
 
 type Audience = "everyone" | "unpaid" | "brother" | "pledge" | "other";
 type ComposerMode = "broadcast" | "individual";
@@ -106,23 +106,23 @@ export default function SmsComposer({
           if (audience === "unpaid") {
             return (
               member.dues_paid !== 1 &&
-              (member.status === "brother" || member.status === "pledge")
+              isBillableMember(member.status, member.tags, period.custom_categories)
             );
           }
           if (audience === "brother") return member.status === "brother";
           if (audience === "pledge") return member.status === "pledge";
           return member.status === "alumni" || member.status === "inactive";
         }),
-    [audience, members]
+    [audience, members, period.custom_categories]
   );
 
   const unpaidRecipients = recipients.filter(
     (member) =>
       member.dues_paid !== 1 &&
-      (member.status === "brother" || member.status === "pledge")
+      isBillableMember(member.status, member.tags, period.custom_categories)
   );
   const expectedOpen = unpaidRecipients.reduce((sum, member) => {
-    const setRate = member.status === "pledge" ? period.pledge_dues : period.active_dues;
+    const setRate = memberSetRate(member.status, member.tags, period.custom_categories, period.active_dues, period.pledge_dues);
     return (
       sum +
       memberEffectiveDues(
@@ -512,7 +512,7 @@ function firstName(name: string): string {
 }
 
 function duesAmount(member: MemberRow, period: PeriodRow): string {
-  const setRate = member.status === "pledge" ? period.pledge_dues : period.active_dues;
+  const setRate = memberSetRate(member.status, member.tags, period.custom_categories, period.active_dues, period.pledge_dues);
   return fmtUSD(
     memberEffectiveDues(member.aid_plan, member.aid_amount, period.dues_plans, setRate)
   );

@@ -10,7 +10,13 @@ import {
   setDuesPlans,
 } from "@/app/actions/dues";
 import { MemberRow, PeriodRow } from "@/lib/db";
-import { DuesPlan, memberEffectiveDues } from "@/lib/memberDues";
+import {
+  DuesPlan,
+  memberEffectiveDues,
+  memberSetRate,
+  memberTier,
+  pricingCategory,
+} from "@/lib/memberDues";
 import { fmtUSD } from "@/lib/forecast";
 
 const selectCls =
@@ -25,8 +31,13 @@ export default function DuesBoard({
   period: PeriodRow;
 }) {
   const plans = period.dues_plans;
-  const brothers = members.filter((m) => m.status === "brother");
-  const pledges = members.filter((m) => m.status === "pledge");
+  const cats = period.custom_categories;
+  // Tier members are billed in their own section, so pull them out of the
+  // brother/pledge sections to avoid showing (and counting) them twice.
+  const tierOf = (m: MemberRow) => memberTier(m.tags, cats);
+  const brothers = members.filter((m) => m.status === "brother" && !tierOf(m));
+  const pledges = members.filter((m) => m.status === "pledge" && !tierOf(m));
+  const tiers = cats.filter((c) => c.tier && c.dues.rule !== "inherit");
 
   return (
     <>
@@ -37,7 +48,7 @@ export default function DuesBoard({
           title="Brothers"
           hint="Most pay full dues — put anyone on a plan or give them an individual amount."
           members={brothers}
-          setRate={period.active_dues}
+          period={period}
           plans={plans}
           empty="No brothers on the roster yet."
         />
@@ -45,10 +56,23 @@ export default function DuesBoard({
           title="Pledges"
           hint="Added as they join. Estimate financial-aid pledges with a plan."
           members={pledges}
-          setRate={period.pledge_dues}
+          period={period}
           plans={plans}
           empty="No pledges on the roster yet — they're added as they join."
         />
+        {tiers.map((t) => (
+          <MemberSection
+            key={t.id}
+            title={t.plural || t.name}
+            hint="A custom tier — bills at its own rate; put anyone on a plan or an individual amount."
+            members={members.filter(
+              (m) => m.status !== "trash" && tierOf(m)?.id === t.id
+            )}
+            period={period}
+            plans={plans}
+            empty="No members in this tier yet — tag them on the Members tab."
+          />
+        ))}
       </div>
     </>
   );
@@ -161,19 +185,21 @@ function MemberSection({
   title,
   hint,
   members,
-  setRate,
+  period,
   plans,
   empty,
 }: {
   title: string;
   hint: string;
   members: MemberRow[];
-  setRate: number;
+  period: PeriodRow;
   plans: DuesPlan[];
   empty: string;
 }) {
+  const rateOf = (m: MemberRow) =>
+    memberSetRate(m.status, m.tags, period.custom_categories, period.active_dues, period.pledge_dues);
   const subtotal = members.reduce(
-    (sum, m) => sum + memberEffectiveDues(m.aid_plan, m.aid_amount, plans, setRate),
+    (sum, m) => sum + memberEffectiveDues(m.aid_plan, m.aid_amount, plans, rateOf(m)),
     0
   );
 
@@ -194,7 +220,7 @@ function MemberSection({
       ) : (
         <div className="divide-y divide-border/40">
           {members.map((m) => (
-            <MemberDuesRow key={m.id} member={m} setRate={setRate} plans={plans} />
+            <MemberDuesRow key={m.id} member={m} period={period} plans={plans} />
           ))}
         </div>
       )}
@@ -204,16 +230,25 @@ function MemberSection({
 
 function MemberDuesRow({
   member,
-  setRate,
+  period,
   plans,
 }: {
   member: MemberRow;
-  setRate: number;
+  period: PeriodRow;
   plans: DuesPlan[];
 }) {
   const [, startTransition] = useTransition();
   const onAid = member.aid_plan != null;
   const paid = member.dues_paid === 1;
+  // The set rate honors a dues-bearing tag (else the status rate).
+  const setRate = memberSetRate(
+    member.status,
+    member.tags,
+    period.custom_categories,
+    period.active_dues,
+    period.pledge_dues
+  );
+  const pricedBy = pricingCategory(member.status, member.tags, period.custom_categories);
   // What this member pays by default for their category (the input's placeholder).
   const defaultAmt = onAid ? plans[member.aid_plan!]?.amount ?? 0 : setRate;
 
@@ -238,7 +273,12 @@ function MemberDuesRow({
 
   return (
     <div className={`grid ${ROW_GRID} items-center gap-3 px-5 py-2.5`}>
-      <span className="truncate text-sm font-medium text-foreground">{member.name}</span>
+      <span className="min-w-0 truncate text-sm font-medium text-foreground">
+        {member.name}
+        {pricedBy && !onAid && (
+          <span className="ml-2 text-xs font-normal text-muted-foreground">· {pricedBy.name}</span>
+        )}
+      </span>
 
       <select
         value={onAid ? String(member.aid_plan) : "full"}

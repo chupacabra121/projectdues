@@ -17,7 +17,7 @@ import {
 } from "@/app/actions/collections";
 import type { MemberRow, PeriodRow } from "@/lib/db";
 import { fmtUSD } from "@/lib/forecast";
-import { memberEffectiveDues } from "@/lib/memberDues";
+import { memberEffectiveDues, memberSetRate, isBillableMember } from "@/lib/memberDues";
 import {
   COLLECTION_STAGES,
   CONTACT_CHANNELS,
@@ -51,7 +51,9 @@ export default function CollectionsDashboard({
   const [, startTransition] = useTransition();
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const billable = members
-    .filter((member) => member.status === "brother" || member.status === "pledge")
+    .filter((member) =>
+      isBillableMember(member.status, member.tags, period.custom_categories)
+    )
     .map((member) => toCollectionMember(member, period));
   const selectedIds = useMemo(() => Array.from(selected), [selected]);
   const paid = billable.filter((member) => member.effectiveStage === "paid");
@@ -481,7 +483,13 @@ function toCollectionMember(
   member: MemberRow,
   period: PeriodRow
 ): CollectionMember {
-  const setRate = member.status === "pledge" ? period.pledge_dues : period.active_dues;
+  const setRate = memberSetRate(
+    member.status,
+    member.tags,
+    period.custom_categories,
+    period.active_dues,
+    period.pledge_dues
+  );
   const effectiveStage =
     member.dues_paid === 1 ? "paid" : member.collection_stage || "not_contacted";
   return {

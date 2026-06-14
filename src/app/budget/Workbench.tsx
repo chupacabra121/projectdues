@@ -10,6 +10,7 @@ import {
   ForecastSettings,
   fmtUSD,
   itemSemesterCost,
+  tierGross,
 } from "@/lib/forecast";
 import { AddItemForm, ItemRow } from "./ItemForms";
 import { inputCls } from "@/components/AuthShell";
@@ -101,6 +102,9 @@ export default function Workbench({
       semester_start: settings.semester_start,
       semester_end: settings.semester_end,
       dues_schedule: settings.dues_schedule,
+      // Custom tiers are materialized from the roster and billed at their own
+      // rate; read-only here (their rate is set in Manage categories).
+      custom_tier_breakdowns: settings.custom_tier_breakdowns,
     };
   }, [
     s,
@@ -109,6 +113,7 @@ export default function Workbench({
     settings.dues_schedule,
     settings.semester_start,
     settings.semester_end,
+    settings.custom_tier_breakdowns,
     bd,
   ]);
 
@@ -223,6 +228,33 @@ export default function Workbench({
             subtotal={pledgesSubtotal}
           />
         </div>
+
+        {/* Custom tiers — each billed at its own rate (set in Manage categories) */}
+        {live.custom_tier_breakdowns!.length > 0 && (
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {live.custom_tier_breakdowns!.map((t) => {
+              const heads = t.fullCount + t.aid.length;
+              return (
+                <div
+                  key={t.catId}
+                  className="rounded-2xl border border-border bg-background p-4"
+                >
+                  <div className="mb-1 flex items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-foreground">{t.label}</p>
+                    <p className="font-money text-base font-semibold text-foreground">
+                      {fmtUSD(tierGross(t))}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {heads} {heads === 1 ? "member" : "members"}
+                    {t.aid.length > 0 ? ` (${t.fullCount} full)` : ""} · {fmtUSD(t.fullRate)} each
+                    · collects {Math.round(t.collectionRate * 100)}%
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Recruitment range — low/high that power the outlook in step 5 */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-border bg-muted/30 px-4 py-2.5 text-xs">

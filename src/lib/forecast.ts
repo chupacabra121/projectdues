@@ -21,6 +21,21 @@ export interface ActiveDuesBreakdown {
   aid: AidMember[];
 }
 
+/**
+ * A user-defined dues TIER (a promoted member category, peer of Brother/Pledge):
+ * its own headcount × rate plus any individually-priced (financial-aid) members,
+ * and its OWN collection rate. Materialized from the roster onto the period.
+ */
+export interface TierBreakdown {
+  catId: string;
+  label: string;
+  color: string;
+  fullCount: number;
+  fullRate: number;
+  aid: AidMember[];
+  collectionRate: number; // 0..1, this tier's own rate
+}
+
 export interface ForecastSettings {
   active_members: number;
   current_pledges: number;
@@ -39,6 +54,12 @@ export interface ForecastSettings {
   dues_schedule?: string;
   /** Full-dues + financial-aid split; falls back to the flat fields if null. */
   active_dues_breakdown?: ActiveDuesBreakdown | null;
+  /**
+   * User-defined dues tiers (promoted categories). Each is billed at its OWN
+   * collection rate and added on top of the active+pledge revenue. Tier members
+   * are NOT counted as actives and don't scale per-head "Everyone" costs.
+   */
+  custom_tier_breakdowns?: TierBreakdown[] | null;
 }
 
 /** Total active dues billed before collection rate (full tier + aid members). */
@@ -55,6 +76,24 @@ export function activeMemberCount(s: ForecastSettings): number {
   const b = s.active_dues_breakdown;
   if (b) return b.fullCount + b.aid.length;
   return s.active_members;
+}
+
+/** One tier's gross dues before its collection rate. */
+export function tierGross(t: TierBreakdown): number {
+  return t.fullCount * t.fullRate + t.aid.reduce((sum, a) => sum + a.amount, 0);
+}
+
+/** Headcount in a tier (full-rate + individually-priced members). */
+export function tierMemberCount(t: TierBreakdown): number {
+  return t.fullCount + t.aid.length;
+}
+
+/** Projected revenue from all custom tiers, each net of its OWN collection rate. */
+export function customTiersRevenue(s: ForecastSettings): number {
+  return (s.custom_tier_breakdowns ?? []).reduce(
+    (sum, t) => sum + tierGross(t) * t.collectionRate,
+    0
+  );
 }
 
 export interface ForecastItem {
@@ -149,8 +188,12 @@ export interface Insight {
 }
 
 export function revenueFor(s: ForecastSettings, pledgeCount: number): number {
+  // Actives + pledges share the overall collection rate; each custom tier is
+  // billed at its own rate and added on top (tiers are a fixed roster, so they
+  // don't swing with the pledge-class size).
   return (
-    (activeDuesGross(s) + pledgeCount * s.pledge_dues) * s.collection_rate
+    (activeDuesGross(s) + pledgeCount * s.pledge_dues) * s.collection_rate +
+    customTiersRevenue(s)
   );
 }
 

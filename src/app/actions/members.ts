@@ -1,11 +1,37 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb, getActivePeriod, recomputeDerivedDues } from "@/lib/db";
+import {
+  getDb,
+  getActivePeriod,
+  recomputeDerivedDues,
+  parseMemberTags,
+  parseCustomCategories,
+} from "@/lib/db";
 import { MEMBER_STATUSES, MemberStatus } from "@/lib/memberStatus";
 import { requireUser } from "@/lib/auth";
 
-const PATHS = ["/dashboard", "/budget", "/actuals", "/members", "/scenarios", "/periods"];
+const PATHS = [
+  "/dashboard",
+  "/budget",
+  "/actuals",
+  "/members",
+  "/dues",
+  "/collections",
+  "/scenarios",
+  "/periods",
+];
+
+/** Sanitize a member's tags from a JSON string: known category ids only, de-duped. */
+function cleanTags(raw: unknown, periodId: number, userId: number): string {
+  const ids = parseMemberTags(raw);
+  if (ids.length === 0) return "[]";
+  const period = getDb()
+    .prepare("SELECT custom_categories FROM periods WHERE id = ? AND user_id = ?")
+    .get(periodId, userId) as { custom_categories: unknown } | undefined;
+  const valid = new Set(parseCustomCategories(period?.custom_categories).map((c) => c.id));
+  return JSON.stringify(ids.filter((id) => valid.has(id)));
+}
 
 function revalidateAll() {
   for (const p of PATHS) revalidatePath(p);
@@ -125,19 +151,33 @@ export async function updateMember(formData: FormData): Promise<void> {
   const name = cleanContact(formData.get("name"));
   if (!id || !name) return;
   const period = getActivePeriod(user.id);
-  getDb()
-    .prepare(
-      `UPDATE members SET name = ?, email = ?, phone = ?, status = ?
-       WHERE id = ? AND user_id = ?`
-    )
-    .run(
-      name,
-      cleanContact(formData.get("email")),
-      cleanContact(formData.get("phone"), 40),
-      parseStatus(formData.get("status")),
-      id,
-      user.id
-    );
+  const email = cleanContact(formData.get("email"));
+  const phone = cleanContact(formData.get("phone"), 40);
+  const status = parseStatus(formData.get("status"));
+  // The edit form carries tags; other callers may not — only touch tags when present.
+  if (formData.has("tags") && period) {
+    getDb()
+      .prepare(
+        `UPDATE members SET name = ?, email = ?, phone = ?, status = ?, tags = ?
+         WHERE id = ? AND user_id = ?`
+      )
+      .run(
+        name,
+        email,
+        phone,
+        status,
+        cleanTags(formData.get("tags"), period.id, user.id),
+        id,
+        user.id
+      );
+  } else {
+    getDb()
+      .prepare(
+        `UPDATE members SET name = ?, email = ?, phone = ?, status = ?
+         WHERE id = ? AND user_id = ?`
+      )
+      .run(name, email, phone, status, id, user.id);
+  }
   if (period) recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
@@ -157,6 +197,20 @@ export async function setMemberStatus(formData: FormData): Promise<void> {
     .prepare("UPDATE members SET status = ? WHERE id = ? AND user_id = ?")
     .run(status, id, user.id);
   if (period) recomputeDerivedDues(user.id, period.id);
+  revalidateAll();
+}
+
+/** Set a member's custom-category tags (from the row's tag editor). */
+export async function setMemberTags(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = Number(formData.get("id"));
+  if (!id) return;
+  const period = getActivePeriod(user.id);
+  if (!period) return;
+  getDb()
+    .prepare("UPDATE members SET tags = ? WHERE id = ? AND user_id = ?")
+    .run(cleanTags(formData.get("tags"), period.id, user.id), id, user.id);
+  recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
 

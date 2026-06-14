@@ -17,7 +17,12 @@ export default async function MembersPage() {
           Members
           <span className="text-muted-foreground"> · {period.name}</span>
         </h1>
-        <Roster key={period.id} members={members} />
+        <Roster
+          key={period.id}
+          members={members}
+          categories={period.custom_categories}
+          defaultCollectionRate={period.collection_rate}
+        />
       </div>
     </AppShell>
   );

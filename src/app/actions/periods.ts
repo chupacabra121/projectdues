@@ -75,6 +75,14 @@ export async function createPeriod(formData: FormData): Promise<void> {
 
   const create = db.transaction((): number => {
     const base = carrySettings && from ? from : null;
+    // Custom categories are roster metadata: the carried members' tags reference
+    // category ids, so the definitions must travel whenever the roster is carried
+    // (even without carry_settings) — otherwise tier tags orphan and their dues
+    // silently vanish. Carry them with either the settings OR the roster.
+    const carriedCategories =
+      (carrySettings || carryRoster) && from?.custom_categories?.length
+        ? JSON.stringify(from.custom_categories)
+        : null;
     const pid = Number(
       db
         .prepare(
@@ -84,8 +92,8 @@ export async function createPeriod(formData: FormData): Promise<void> {
             pledges_conservative, pledges_expected, pledges_optimistic,
             active_dues, pledge_dues, collection_rate,
             starting_balance, dues_collected, reserve_target, dues_schedule,
-            active_dues_breakdown
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`
+            active_dues_breakdown, custom_categories
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`
         )
         .run(
           user.id,
@@ -104,20 +112,24 @@ export async function createPeriod(formData: FormData): Promise<void> {
           base?.dues_schedule ?? "sixweek",
           base?.active_dues_breakdown
             ? JSON.stringify(base.active_dues_breakdown)
-            : null
+            : null,
+          carriedCategories
         ).lastInsertRowid
     );
 
     if (from && carryRoster) {
       const members = db
-        .prepare("SELECT name, email, phone, status FROM members WHERE user_id = ? AND period_id = ? AND status != 'trash'")
-        .all(user.id, from.id) as { name: string; email: string; phone: string; status: string }[];
+        .prepare("SELECT name, email, phone, status, tags FROM members WHERE user_id = ? AND period_id = ? AND status != 'trash'")
+        .all(user.id, from.id) as { name: string; email: string; phone: string; status: string; tags: string }[];
       const insert = db.prepare(
-        "INSERT INTO members (user_id, period_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?)"
+        "INSERT INTO members (user_id, period_id, name, email, phone, status, tags) VALUES (?, ?, ?, ?, ?, ?, ?)"
       );
       for (const m of members) {
         const status = promotePledges ? "brother" : m.status;
-        insert.run(user.id, pid, m.name, m.email, m.phone, status);
+        // Tags carry verbatim — category ids are stable because carrySettings
+        // copies custom_categories as-is. Orphan ids (roster-without-settings)
+        // are tolerated by every reader.
+        insert.run(user.id, pid, m.name, m.email, m.phone, status, m.tags ?? "[]");
       }
       // Sync the headcount to the carried roster — but only when rows were
       // actually copied. An empty source roster (e.g. a "start from scratch"

@@ -1,13 +1,20 @@
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
-import { ActiveDuesBreakdown } from "./forecast";
+import { ActiveDuesBreakdown, TierBreakdown } from "./forecast";
 import { MemberStatus } from "./memberStatus";
 import { CollectionStage, ContactChannel } from "./collectionStages";
 import {
   DuesPlan,
   DEFAULT_DUES_PLANS,
   memberEffectiveDues,
+  memberSetRate,
+  memberTier,
+  hasRepricingTag,
+  CustomCategory,
+  DuesRule,
+  CATEGORY_COLOR_TOKENS,
+  MAX_CUSTOM_CATEGORIES,
 } from "./memberDues";
 
 const DATA_DIR = path.join(process.cwd(), "data");
@@ -120,6 +127,9 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "budget_items", "actual_amount", "REAL");
   addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
   addColumnIfMissing(db, "budget_items", "paid", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "members", "tags", "TEXT NOT NULL DEFAULT '[]'");
+  addColumnIfMissing(db, "periods", "custom_categories", "TEXT");
+  addColumnIfMissing(db, "periods", "custom_tier_breakdowns", "TEXT");
   addColumnIfMissing(db, "settings", "dues_schedule", "TEXT NOT NULL DEFAULT 'sixweek'");
   addColumnIfMissing(db, "settings", "active_period_id", "INTEGER");
   addColumnIfMissing(db, "budget_items", "period_id", "INTEGER");
@@ -174,12 +184,106 @@ export function parseDuesPlans(raw: unknown): DuesPlan[] {
   }
 }
 
+const DUES_RULES: DuesRule[] = ["inherit", "none", "full", "pledge", "custom"];
+
+/** Parse the period's custom categories (tags) JSON, sanitizing every field. */
+export function parseCustomCategories(raw: unknown): CustomCategory[] {
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p)) return [];
+    const seen = new Set<string>();
+    const out: CustomCategory[] = [];
+    for (const c of p.slice(0, MAX_CUSTOM_CATEGORIES)) {
+      const id = String(c?.id ?? "").slice(0, 24);
+      if (!id || seen.has(id)) continue; // drop blank / duplicate ids
+      seen.add(id);
+      const rule = (DUES_RULES as string[]).includes(String(c?.dues?.rule))
+        ? (String(c?.dues?.rule) as DuesRule)
+        : "inherit";
+      const color = (CATEGORY_COLOR_TOKENS as readonly string[]).includes(
+        String(c?.color)
+      )
+        ? String(c?.color)
+        : "slate";
+      // A tier must bill — an "inherit" rule has no own rate, so a tier with it
+      // would be a silent dead tier. Collapse that limbo state to a plain tag.
+      const tier = c?.tier === true && rule !== "inherit";
+      const cat: CustomCategory = {
+        id,
+        name: String(c?.name ?? "").slice(0, 40) || "Category",
+        color,
+        dues: { rule, amount: Math.max(0, Number(c?.dues?.amount) || 0) },
+      };
+      if (tier) {
+        cat.tier = true;
+        const plural = String(c?.plural ?? "").slice(0, 40);
+        if (plural) cat.plural = plural;
+        const rate = Number(c?.collectionRate);
+        // Stored as a 0..1 fraction; recompute defaults a missing one to the
+        // period rate, so only clamp when a value is actually present.
+        if (Number.isFinite(rate)) cat.collectionRate = Math.min(1, Math.max(0, rate));
+      }
+      out.push(cat);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Parse the materialized custom-tier dues breakdowns JSON (per-tier gross). */
+export function parseTierBreakdowns(raw: unknown): TierBreakdown[] {
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p)) return [];
+    return p.slice(0, MAX_CUSTOM_CATEGORIES).map((t: Record<string, unknown>) => ({
+      catId: String(t?.catId ?? "").slice(0, 24),
+      label: String(t?.label ?? "").slice(0, 40) || "Tier",
+      color: (CATEGORY_COLOR_TOKENS as readonly string[]).includes(String(t?.color))
+        ? String(t?.color)
+        : "slate",
+      fullCount: Math.max(0, Math.round(Number(t?.fullCount) || 0)),
+      fullRate: Math.max(0, Number(t?.fullRate) || 0),
+      aid: Array.isArray(t?.aid)
+        ? (t.aid as { name?: unknown; amount?: unknown }[]).map((a) => ({
+            name: String(a?.name ?? "").slice(0, 80),
+            amount: Math.max(0, Number(a?.amount) || 0),
+          }))
+        : [],
+      collectionRate: Math.min(1, Math.max(0, Number(t?.collectionRate) || 0)),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/** Parse a member's tags JSON (an array of category ids), de-duped. */
+export function parseMemberTags(raw: unknown): string[] {
+  if (typeof raw !== "string" || !raw) return [];
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p)) return [];
+    const out: string[] = [];
+    for (const t of p.slice(0, MAX_CUSTOM_CATEGORIES)) {
+      const id = String(t ?? "").slice(0, 24);
+      if (id && !out.includes(id)) out.push(id);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 /** Hydrate a raw periods row: parse the breakdown + plans JSON into typed fields. */
 function hydratePeriod(row: Record<string, unknown>): PeriodRow {
   return {
     ...(row as unknown as PeriodRow),
     active_dues_breakdown: parseActiveDuesBreakdown(row.active_dues_breakdown),
     dues_plans: parseDuesPlans(row.dues_plans),
+    custom_categories: parseCustomCategories(row.custom_categories),
+    custom_tier_breakdowns: parseTierBreakdowns(row.custom_tier_breakdowns),
   };
 }
 
@@ -366,6 +470,7 @@ function migrateMemberStatuses(db: Database.Database) {
     "last_contacted_at",
     "last_contact_channel",
     "period_id",
+    "tags",
   ].filter((c) => existing.has(c));
   const copyCols = [...required, ...optional].join(", ");
   db.exec(`
@@ -423,6 +528,7 @@ function migrateMemberBrotherStatus(db: Database.Database) {
     "last_contacted_at",
     "last_contact_channel",
     "period_id",
+    "tags",
   ].filter((c) => existing.has(c));
   const cols = [...required, ...optional];
   const copyCols = cols.join(", ");
@@ -507,6 +613,10 @@ export interface PeriodRow {
   active_dues_breakdown: ActiveDuesBreakdown | null;
   /** Financial-aid plans (name + preset amount); parsed by the getters. */
   dues_plans: DuesPlan[];
+  /** User-defined member categories (tags), each with an optional dues rule. */
+  custom_categories: CustomCategory[];
+  /** Materialized per-tier dues breakdowns (promoted categories); from the roster. */
+  custom_tier_breakdowns: TierBreakdown[];
   collection_payment_instructions: string;
 }
 
@@ -562,14 +672,20 @@ export interface MemberRow {
   contact_count: number;
   last_contacted_at: string | null;
   last_contact_channel: ContactChannel | null;
+  /** Custom-category ids the member is tagged with; parsed by getMembers. */
+  tags: string[];
 }
 
 export function getMembers(userId: number, periodId: number): MemberRow[] {
-  return getDb()
+  const rows = getDb()
     .prepare(
       "SELECT * FROM members WHERE user_id = ? AND period_id = ? ORDER BY status ASC, name COLLATE NOCASE ASC"
     )
-    .all(userId, periodId) as MemberRow[];
+    .all(userId, periodId) as Record<string, unknown>[];
+  return rows.map((r) => ({
+    ...(r as unknown as MemberRow),
+    tags: parseMemberTags(r.tags),
+  }));
 }
 
 /**
@@ -587,56 +703,111 @@ export function recomputeDerivedDues(userId: number, periodId: number): void {
   const db = getDb();
   const period = db
     .prepare(
-      "SELECT active_dues, pledge_dues, dues_plans FROM periods WHERE id = ? AND user_id = ?"
+      "SELECT active_dues, pledge_dues, collection_rate, dues_plans, custom_categories FROM periods WHERE id = ? AND user_id = ?"
     )
     .get(periodId, userId) as
-    | { active_dues: number; pledge_dues: number; dues_plans: unknown }
+    | {
+        active_dues: number;
+        pledge_dues: number;
+        collection_rate: number;
+        dues_plans: unknown;
+        custom_categories: unknown;
+      }
     | undefined;
   if (!period) return;
   const plans = parseDuesPlans(period.dues_plans);
+  const cats = parseCustomCategories(period.custom_categories);
   const activeRate = Math.max(0, Number(period.active_dues) || 0);
   const pledgeRate = Math.max(0, Number(period.pledge_dues) || 0);
-  // The dues-paying tiers — "Actives" = brothers (full rate) + pledges.
-  const members = db
-    .prepare(
-      "SELECT name, status, aid_plan, aid_amount, dues_paid FROM members WHERE user_id = ? AND period_id = ? AND status IN ('brother','pledge')"
-    )
-    .all(userId, periodId) as {
-    name: string;
-    status: string;
-    aid_plan: number | null;
-    aid_amount: number | null;
-    dues_paid: number;
-  }[];
+  const periodRate = Math.min(1, Math.max(0, Number(period.collection_rate) || 0));
 
-  const duesOf = (m: { status: string; aid_plan: number | null; aid_amount: number | null }) =>
+  // Load everyone who could owe dues: brothers/pledges, plus anyone (any status)
+  // carrying a promoted-tier tag — so a dues-paying alumnus is included. Trash
+  // is excluded. Each member is annotated with their tier (or null).
+  const members = (
+    db
+      .prepare(
+        "SELECT name, status, aid_plan, aid_amount, dues_paid, tags FROM members WHERE user_id = ? AND period_id = ? AND status != 'trash'"
+      )
+      .all(userId, periodId) as {
+      name: string;
+      status: string;
+      aid_plan: number | null;
+      aid_amount: number | null;
+      dues_paid: number;
+      tags: unknown;
+    }[]
+  ).map((m) => {
+    const tags = parseMemberTags(m.tags);
+    return { ...m, tags, tier: memberTier(tags, cats) };
+  });
+
+  const duesOf = (m: (typeof members)[number]) =>
     memberEffectiveDues(
       m.aid_plan,
       m.aid_amount,
       plans,
-      m.status === "brother" ? activeRate : pledgeRate
+      memberSetRate(m.status, m.tags, cats, activeRate, pledgeRate)
     );
 
-  // Full-dues (brother) breakdown: anyone with a plan or an override is priced
-  // individually; the rest pay the flat rate (fullCount × fullRate). The
-  // active_* period fields hold this brother tier (see recomputeDerivedDues docs).
-  const brothers = members.filter((m) => m.status === "brother");
+  // Promoted-tier members are billed in their tier and pulled OUT of the
+  // brother bucket, so nothing is double-counted.
+  const tierMembers = members.filter((m) => m.tier != null);
+  const brothers = members.filter((m) => m.tier == null && m.status === "brother");
+
+  // Full-dues (brother) breakdown: anyone with a plan, an override, or a
+  // re-pricing tag is itemized; the rest pay the flat rate (fullCount ×
+  // fullRate). The active_* period fields hold this brother tier.
   const aid = brothers
-    .filter((m) => m.aid_plan != null || m.aid_amount != null)
-    .map((m) => ({
-      name: m.name,
-      amount: memberEffectiveDues(m.aid_plan, m.aid_amount, plans, activeRate),
-    }));
+    .filter(
+      (m) =>
+        m.aid_plan != null ||
+        m.aid_amount != null ||
+        hasRepricingTag(m.tags, cats)
+    )
+    .map((m) => ({ name: m.name, amount: duesOf(m) }));
   const breakdown = { fullCount: brothers.length - aid.length, fullRate: activeRate, aid };
 
-  // Collected = the dues of everyone checked off (brothers and pledges alike).
+  // One breakdown per promoted tier that has members — its own gross + its own
+  // collection rate (falling back to the period rate). Mirrors the brother
+  // breakdown: full-rate members plus individually-priced (financial-aid) ones.
+  const tierBreakdowns: TierBreakdown[] = cats
+    .filter((c) => c.tier && c.dues.rule !== "inherit")
+    .map((c) => {
+      const mine = tierMembers.filter((m) => m.tier!.id === c.id);
+      // The tier's flat rate — resolve the rule through memberSetRate (status is
+      // irrelevant once a tier tag is present).
+      const tierRate = memberSetRate("alumni", [c.id], cats, activeRate, pledgeRate);
+      const tAid = mine
+        .filter((m) => m.aid_plan != null || m.aid_amount != null)
+        .map((m) => ({ name: m.name, amount: duesOf(m) }));
+      return {
+        catId: c.id,
+        label: c.plural || c.name,
+        color: c.color,
+        fullCount: mine.length - tAid.length,
+        fullRate: tierRate,
+        aid: tAid,
+        collectionRate: c.collectionRate ?? periodRate,
+      };
+    })
+    .filter((t) => t.fullCount + t.aid.length > 0);
+
+  // Collected = dues of everyone checked off (brother, pledge, or tier alike).
   const collected = members
     .filter((m) => m.dues_paid === 1)
     .reduce((sum, m) => sum + duesOf(m), 0);
 
   db.prepare(
-    "UPDATE periods SET active_members = ?, active_dues_breakdown = ?, dues_collected = ? WHERE id = ? AND user_id = ?"
-  ).run(brothers.length, JSON.stringify(breakdown), collected, periodId, userId);
+    "UPDATE periods SET active_members = ?, active_dues_breakdown = ?, custom_tier_breakdowns = ?, dues_collected = ? WHERE id = ? AND user_id = ?"
+  ).run(
+    brothers.length,
+    JSON.stringify(breakdown),
+    JSON.stringify(tierBreakdowns),
+    collected,
+    periodId,
+    userId
+  );
 }
 
 export function getPeriods(userId: number): PeriodRow[] {
