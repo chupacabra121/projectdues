@@ -143,11 +143,7 @@ export default function Workbench({
       </div>
 
       {/* Summary strip */}
-      <section
-        className={`grid grid-cols-2 gap-4 lg:grid-cols-4 ${
-          forecast.variance !== 0 ? "mb-4" : "mb-8"
-        }`}
-      >
+      <section className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <SummaryCard label="Total Income" value={fmtUSD(forecast.totalIncome)}
           sub={forecast.otherIncome > 0 ? `incl. ${fmtUSD(forecast.otherIncome)} other income` : "dues, expected pledge class"} />
         <SummaryCard label="Fixed Obligations" value={fmtUSD(forecast.fixedObligations)}
@@ -158,23 +154,6 @@ export default function Workbench({
           sub={forecast.remainingBalance >= 0 ? "surplus" : "deficit"}
           tone={forecast.remainingBalance >= 0 ? "good" : "bad"} />
       </section>
-
-      {/* Actuals vs plan — a reality check on the numbers above */}
-      {forecast.variance !== 0 && (
-        <div className="mb-8 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-muted-foreground">Actuals vs plan:</span>
-          <span
-            className={`rounded-full px-3 py-1 font-medium ${
-              forecast.variance > 0
-                ? "bg-amber-500/10 text-amber-800"
-                : "bg-primary/10 text-accent-foreground"
-            }`}
-            title="Actual costs vs plan, across items with a known actual"
-          >
-            {forecast.variance > 0 ? "+" : "−"}{fmtUSD(Math.abs(forecast.variance))} vs plan
-          </span>
-        </div>
-      )}
 
       {/* Money In */}
       <section id="money-in" className="mb-6 rounded-[1.5rem] border border-border bg-card p-6">

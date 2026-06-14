@@ -31,8 +31,8 @@ export const AGENTS: AgentProfile[] = [
     tagline: "Can we afford it?",
     description:
       "Penny watches money in and money out, keeps the semester forecast live, and answers the only question that matters: can we afford what we're planning?",
-    focus: ["Live forecast", "Obligations & events", "Member dues", "Recruitment scenarios"],
-    subtabs: ["Overview", "Budget", "Members", "Scenarios"],
+    focus: ["Semester plan", "Plan vs actual", "Member dues", "Recruitment scenarios"],
+    subtabs: ["Dashboard", "Budget", "Plan vs Actual", "Members", "Scenarios"],
   },
   {
     slug: "dues-collection",

@@ -21,7 +21,7 @@ always reset. Penny only ever reports on the period you're in.
 
 
 Every page shares a two-row header: the main tabs up top (Dashboard,
-Budget, Members, Scenarios) with the **agent team strip right below** — four
+Budget, Plan vs Actual, Members, Scenarios) with the **agent team strip right below** — four
 AI-generated teammates with photos; tap one to step into their office.
 **Penny (Budgeting)** runs the main tabs and signs the dashboard's next-action
 card. **Dunn (Dues Collection — mass email/SMS reminders)**, **Russ
@@ -42,7 +42,7 @@ finia.ro.
   of status, name, email, and phone columns; alumni/inactive rows are
   skipped) or start from scratch with just headcounts, then set dues and an
   expected collection rate. Revenue is forecast live as you type.
-- **Budget workbench** — everything on one tab. A *Money In* panel holds
+- **Budget (plan the semester)** — everything on one tab. A *Money In* panel holds
   membership, dues, collection rate, all three pledge-class scenarios,
   balances, reserve target, and the semester window — with debounced
   auto-save and the forecast recalculating live as you type, plus an *Other
@@ -51,6 +51,10 @@ finia.ro.
   do) sit below, with inline click-to-edit on every item. Items are
   auto-categorized with manual override; obligations support one-time,
   monthly, and yearly frequencies.
+- **Plan vs Actual** — once the plan is set, record what each obligation and
+  event really cost; Penny shows the variance per line and rolls it into the
+  forecast and dashboard. Income side compares projected dues to what's been
+  collected. The Budget tab stays the clean *plan*; actuals live here.
 - **Members roster** — every member with email, phone, status, and dues
   balance. Inline editing, one-click "mark paid", filters (all / actives /
   pledges / unpaid), and filter-aware copy-emails / copy-phones buttons — the

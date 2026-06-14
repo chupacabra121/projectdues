@@ -9,7 +9,7 @@ import {
   categorizeIncome,
 } from "@/lib/categorize";
 
-const PATHS = ["/dashboard", "/budget", "/scenarios", "/periods"];
+const PATHS = ["/dashboard", "/budget", "/actuals", "/scenarios", "/periods"];
 const ITEM_TYPES = ["fixed_expense", "planned_event", "other_income"] as const;
 type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -38,7 +38,6 @@ interface ParsedItem {
   type: ItemType;
   name: string;
   amount: number;
-  actual_amount: number | null;
   date: string | null;
   frequency: "one_time" | "monthly" | "yearly";
   category: string;
@@ -66,13 +65,10 @@ function parseItemForm(formData: FormData): ParsedItem | null {
       ? Math.round(attendanceRaw)
       : null;
 
-  const actualRaw = String(formData.get("actual_amount") ?? "").trim();
-
   return {
     type,
     name,
     amount: parseAmount(formData.get("amount")),
-    actual_amount: actualRaw === "" ? null : parseAmount(actualRaw),
     date: parseDate(formData.get("date")),
     frequency: type === "planned_event" ? "one_time" : frequency,
     category,
@@ -87,10 +83,12 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
   if (!item) return;
   const period = getActivePeriod(user.id);
   if (!period) return;
+  // New items carry no actual yet — actuals are recorded on the Plan vs
+  // Actual page once a cost is known.
   getDb()
     .prepare(
       `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`
     )
     .run(
       user.id,
@@ -98,7 +96,6 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
       item.type,
       item.name,
       item.amount,
-      item.actual_amount,
       item.date,
       item.frequency,
       item.category,
@@ -113,16 +110,17 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
   const id = Number(formData.get("id"));
   const item = parseItemForm(formData);
   if (!id || !item) return;
+  // Planning fields only — actual_amount is owned by the Plan vs Actual page
+  // and deliberately left untouched here.
   getDb()
     .prepare(
       `UPDATE budget_items SET
-        name = ?, amount = ?, actual_amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, notes = ?
+        name = ?, amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, notes = ?
        WHERE id = ? AND user_id = ? AND type = ?`
     )
     .run(
       item.name,
       item.amount,
-      item.actual_amount,
       item.date,
       item.frequency,
       item.category,
@@ -165,6 +163,23 @@ export async function setCategoryCap(formData: FormData): Promise<void> {
       "DELETE FROM category_caps WHERE user_id = ? AND period_id = ? AND category = ?"
     ).run(user.id, period.id, category);
   }
+  revalidateAll();
+}
+
+/**
+ * Record (or clear) what an item really cost, from the Plan vs Actual page.
+ * An empty value clears the actual and reverts to the planned amount. For
+ * monthly items the actual is per-occurrence, mirroring the planned amount.
+ */
+export async function setActualAmount(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = Number(formData.get("id"));
+  if (!id) return;
+  const raw = String(formData.get("actual") ?? "").trim();
+  const actual = raw === "" ? null : parseAmount(raw);
+  getDb()
+    .prepare("UPDATE budget_items SET actual_amount = ? WHERE id = ? AND user_id = ?")
+    .run(actual, id, user.id);
   revalidateAll();
 }
 

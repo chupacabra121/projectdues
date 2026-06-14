@@ -167,6 +167,7 @@ export async function updateBudgetSettings(
     );
   revalidatePath("/dashboard");
   revalidatePath("/budget");
+  revalidatePath("/actuals");
   revalidatePath("/scenarios");
   revalidatePath("/periods");
 }

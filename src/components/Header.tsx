@@ -12,6 +12,7 @@ import { AGENTS } from "@/lib/agents";
 const TABS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/budget", label: "Budget" },
+  { href: "/actuals", label: "Plan vs Actual" },
   { href: "/members", label: "Members" },
   { href: "/scenarios", label: "Scenarios" },
 ];
