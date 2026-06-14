@@ -3,23 +3,12 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, ViewTransition } from "react";
 import { Building2, CalendarRange, Check, ChevronDown, Clock3, Moon, Plus, Sun, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { setActivePeriod } from "@/app/actions/periods";
 import { LayoutDashboard } from "lucide-react";
-import { AGENTS, AgentProfile } from "@/lib/agents";
-
-/** The agent whose workspace the current path belongs to, if any. */
-function activeAgentFor(pathname: string): AgentProfile | undefined {
-  return AGENTS.find((a) =>
-    a.navTabs
-      ? a.navTabs.some(
-          (t) => pathname === t.href || pathname.startsWith(t.href + "/")
-        )
-      : pathname.startsWith(a.href)
-  );
-}
+import { AGENTS, activeAgentFor } from "@/lib/agents";
 
 export interface PeriodOption {
   id: number;
@@ -43,7 +32,10 @@ export default function Header({
   const onMembers = pathname.startsWith("/members");
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl">
+    <header
+      className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl"
+      style={{ viewTransitionName: "app-header" }}
+    >
       {/* Row 1 — brand + home + account */}
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Link
@@ -95,27 +87,27 @@ export default function Header({
 
       {/* Row 2 — the team */}
       <div className="border-t border-border/40">
-        <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-center sm:px-6">
-          {AGENTS.map((agent) => {
-            const active = agent.slug === activeAgent?.slug;
-            return (
-              <Link
-                key={agent.slug}
-                href={agent.href}
-                title={
-                  agent.status === "active"
-                    ? `${agent.name} — ${agent.role}, on the clock`
-                    : `${agent.name} — ${agent.role}, coming soon`
-                }
-                className={`flex flex-shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3.5 transition-colors ${
-                  active ? "bg-muted ring-1 ring-primary/40" : "hover:bg-muted/60"
-                }`}
-              >
-                <span
-                  className={`relative h-9 w-9 overflow-hidden rounded-full border ${
-                    active ? "border-primary/70" : "border-border"
-                  }`}
-                >
+        <div
+          className={`mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:px-6 ${
+            activeAgent ? "sm:justify-start" : "sm:justify-center"
+          }`}
+        >
+          {/* The active agent steps out of the lineup into the workspace rail; the
+              rest close ranks. Each avatar shares a view-transition name with that
+              agent's rail portrait, so it morphs across the navigation. */}
+          {AGENTS.filter((agent) => agent.slug !== activeAgent?.slug).map((agent) => (
+            <Link
+              key={agent.slug}
+              href={agent.href}
+              title={
+                agent.status === "active"
+                  ? `${agent.name} — ${agent.role}, on the clock`
+                  : `${agent.name} — ${agent.role}, coming soon`
+              }
+              className="flex flex-shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3.5 transition-colors hover:bg-muted/60"
+            >
+              <ViewTransition name={`agent-${agent.slug}`} share="morph">
+                <span className="relative block h-9 w-9 overflow-hidden rounded-full border border-border">
                   <Image
                     src={agent.image}
                     alt={`${agent.name}, ${agent.role} agent`}
@@ -124,32 +116,29 @@ export default function Header({
                     className="object-cover"
                   />
                 </span>
-                <span className="min-w-0 leading-tight">
-                  <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                    {agent.name}
-                    {agent.status === "active" ? (
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_var(--primary)] ${
-                          active ? "pulse-node" : ""
-                        }`}
-                      />
-                    ) : (
-                      <Clock3 className="h-3 w-3 text-muted-foreground/80" />
-                    )}
-                  </span>
-                  <span className="block text-[11px] text-muted-foreground">
-                    {agent.role}
-                  </span>
+              </ViewTransition>
+              <span className="min-w-0 leading-tight">
+                <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+                  {agent.name}
+                  {agent.status === "active" ? (
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_var(--primary)]" />
+                  ) : (
+                    <Clock3 className="h-3 w-3 text-muted-foreground/80" />
+                  )}
                 </span>
-              </Link>
-            );
-          })}
+                <span className="block text-[11px] text-muted-foreground">
+                  {agent.role}
+                </span>
+              </span>
+            </Link>
+          ))}
         </div>
       </div>
 
-      {/* Row 3 — the selected agent's sub-tabs (only while inside their workspace) */}
+      {/* Row 3 — the selected agent's sub-tabs (mobile/tablet only; on lg+ these
+          live in the workspace rail as a vertical nav). */}
       {activeAgent?.navTabs && (
-        <div className="border-t border-border/40 bg-muted/30">
+        <div className="border-t border-border/40 bg-muted/30 lg:hidden">
           <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-center sm:px-6">
             <span className="mr-1 hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:inline">
               {activeAgent.name}

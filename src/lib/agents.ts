@@ -10,7 +10,10 @@ export interface AgentProfile {
   name: string;
   role: string;
   status: "active" | "soon";
+  /** The small avatar shown on the team strip and cards. */
   image: string;
+  /** A larger portrait for the expanded spotlight; falls back to `image`. */
+  portrait?: string;
   /** Short line under the name on the avatar strip and cards. */
   tagline: string;
   description: string;
@@ -34,6 +37,7 @@ export const AGENTS: AgentProfile[] = [
     role: "Budgeting",
     status: "active",
     image: "/agents/penny.jpg",
+    portrait: "/agents/penny-spotlight.jpg",
     tagline: "Can we afford it?",
     description:
       "Penny watches money in and money out, keeps the semester forecast live, and answers the only question that matters: can we afford what we're planning?",
@@ -53,6 +57,7 @@ export const AGENTS: AgentProfile[] = [
     role: "Dues Collection",
     status: "active",
     image: "/agents/dunn.jpg",
+    portrait: "/agents/dunn-spotlight.jpg",
     tagline: "Politely relentless.",
     description:
       "Dunn sends dues reminders by email and text, escalates gently when payments slip, and reports what's been collected — built on the member roster Penny already keeps.",
@@ -104,4 +109,15 @@ export const AGENTS: AgentProfile[] = [
 
 export function getAgent(slug: string): AgentProfile | undefined {
   return AGENTS.find((a) => a.slug === slug);
+}
+
+/** The agent whose workspace the current path belongs to, if any. */
+export function activeAgentFor(pathname: string): AgentProfile | undefined {
+  return AGENTS.find((a) =>
+    a.navTabs
+      ? a.navTabs.some(
+          (t) => pathname === t.href || pathname.startsWith(t.href + "/")
+        )
+      : pathname.startsWith(a.href)
+  );
 }

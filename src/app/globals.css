@@ -420,6 +420,36 @@
     border-color 280ms var(--ease), box-shadow 280ms var(--ease);
 }
 
+/* ── View transitions — agent chip ⇄ workspace-rail portrait ──────────────── */
+/* The small chip and the large rail portrait share a name and morph between
+   each other across the route change (one continuous motion). */
+::view-transition-group(.morph) {
+  animation-duration: 380ms;
+  animation-timing-function: var(--ease);
+}
+::view-transition-image-pair(.morph) {
+  animation-name: via-blur;
+}
+@keyframes via-blur {
+  30% { filter: blur(3px); }
+}
+/* Anchor the sticky header so the strip/brand stay put while only the
+   content morphs — prevents a double-header flash mid-transition. */
+::view-transition-group(app-header) { animation: none; z-index: 100; }
+::view-transition-old(app-header) { display: none; }
+::view-transition-new(app-header) { animation: none; }
+/* The rail's identity + nav slide in gently (named, so unrelated nav skips it). */
+::view-transition-new(.rail-in) { animation: rail-in 320ms var(--ease) both; }
+@keyframes rail-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: none; }
+}
+/* Fallback for browsers without the View Transitions API: the morph silently
+   no-ops, so give the rail a plain slide-in on mount rather than a hard pop. */
+@supports not (view-transition-name: none) {
+  .rail-enter { animation: rail-in 320ms var(--ease) both; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -427,6 +457,12 @@
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
+  }
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
   }
 }
 

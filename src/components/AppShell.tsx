@@ -1,4 +1,5 @@
 import Header from "./Header";
+import WorkspaceShell from "./WorkspaceShell";
 import { getActivePeriod, getPeriods } from "@/lib/db";
 
 /**
@@ -28,7 +29,9 @@ export default function AppShell({
         periods={periods}
         activePeriodId={active?.id ?? null}
       />
-      <main className="grid-substrate relative z-[1] flex-1">{children}</main>
+      <main className="grid-substrate relative z-[1] flex-1">
+        <WorkspaceShell>{children}</WorkspaceShell>
+      </main>
     </>
   );
 }
