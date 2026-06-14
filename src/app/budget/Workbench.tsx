@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { updateBudgetSettings } from "@/app/actions/setup";
 import { setCategoryCap } from "@/app/actions/budget";
@@ -142,7 +143,11 @@ export default function Workbench({
       </div>
 
       {/* Summary strip */}
-      <section className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
+      <section
+        className={`grid grid-cols-2 gap-4 lg:grid-cols-4 ${
+          forecast.variance !== 0 ? "mb-4" : "mb-8"
+        }`}
+      >
         <SummaryCard label="Total Income" value={fmtUSD(forecast.totalIncome)}
           sub={forecast.otherIncome > 0 ? `incl. ${fmtUSD(forecast.otherIncome)} other income` : "dues, expected pledge class"} />
         <SummaryCard label="Fixed Obligations" value={fmtUSD(forecast.fixedObligations)}
@@ -154,22 +159,10 @@ export default function Workbench({
           tone={forecast.remainingBalance >= 0 ? "good" : "bad"} />
       </section>
 
-      {/* Scenario chips */}
-      <div className="mb-8 flex flex-wrap items-center gap-2 text-sm">
-        <span className="text-muted-foreground">End balance by pledge class:</span>
-        {forecast.scenarios.map((sc) => (
-          <span
-            key={sc.label}
-            className={`rounded-full px-3 py-1 font-medium ${
-              sc.remainingBalance >= 0
-                ? "bg-primary/10 text-accent-foreground"
-                : "bg-destructive/10 text-destructive"
-            }`}
-          >
-            {sc.label} ({sc.pledgeCount}): {fmtUSD(sc.remainingBalance)}
-          </span>
-        ))}
-        {forecast.variance !== 0 && (
+      {/* Actuals vs plan — a reality check on the numbers above */}
+      {forecast.variance !== 0 && (
+        <div className="mb-8 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-muted-foreground">Actuals vs plan:</span>
           <span
             className={`rounded-full px-3 py-1 font-medium ${
               forecast.variance > 0
@@ -178,10 +171,10 @@ export default function Workbench({
             }`}
             title="Actual costs vs plan, across items with a known actual"
           >
-            Actuals {forecast.variance > 0 ? "+" : "−"}{fmtUSD(Math.abs(forecast.variance))} vs plan
+            {forecast.variance > 0 ? "+" : "−"}{fmtUSD(Math.abs(forecast.variance))} vs plan
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Money In */}
       <section id="money-in" className="mb-6 rounded-[1.5rem] border border-border bg-card p-6">
@@ -300,6 +293,53 @@ export default function Workbench({
       </div>
 
       <Allocations items={items} settings={live} caps={caps} />
+
+      {/* Recruitment scenarios — the bottom line, once every input above is set */}
+      <section className="mt-6 rounded-[1.5rem] border border-border bg-card p-6">
+        <div className="mb-1 flex items-baseline justify-between gap-3">
+          <h2 className="font-semibold text-foreground">Recruitment Scenarios</h2>
+          <Link
+            href="/scenarios"
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Full breakdown →
+          </Link>
+        </div>
+        <p className="mb-5 text-sm text-muted-foreground">
+          Projected end-of-semester balance by pledge class size — the bottom
+          line once everything above is filled in.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {forecast.scenarios.map((sc) => {
+            const positive = sc.remainingBalance >= 0;
+            const isExpected = sc.label === "Expected";
+            return (
+              <div
+                key={sc.label}
+                className={`rounded-2xl border p-4 ${
+                  isExpected
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border bg-muted/30"
+                }`}
+              >
+                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  {sc.label}
+                </p>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {sc.pledgeCount} pledges
+                </p>
+                <p
+                  className={`mt-2 text-xl font-semibold ${
+                    positive ? "text-primary" : "text-destructive"
+                  }`}
+                >
+                  {fmtUSD(sc.remainingBalance)}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     </>
   );
 }
