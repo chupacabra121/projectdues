@@ -16,6 +16,12 @@ export interface AgentProfile {
   description: string;
   focus: string[];
   subtabs: string[];
+  /**
+   * Real, navigable sub-tabs for an active agent — shown in the header only
+   * while you're inside this agent's workspace. The agent is considered
+   * "selected" when the current path matches one of these.
+   */
+  navTabs?: { href: string; label: string }[];
   /** What the chapter can already do today, while the agent is in prep. */
   today?: { text: string; href: string; label: string };
 }
@@ -32,7 +38,13 @@ export const AGENTS: AgentProfile[] = [
     description:
       "Penny watches money in and money out, keeps the semester forecast live, and answers the only question that matters: can we afford what we're planning?",
     focus: ["Semester plan", "Plan vs actual", "Member dues", "Recruitment scenarios"],
-    subtabs: ["Dashboard", "Budget", "Plan vs Actual", "Members", "Scenarios"],
+    subtabs: ["Budget", "Plan vs Actual", "Members", "Scenarios"],
+    navTabs: [
+      { href: "/budget", label: "Budget" },
+      { href: "/actuals", label: "Plan vs Actual" },
+      { href: "/members", label: "Members" },
+      { href: "/scenarios", label: "Scenarios" },
+    ],
   },
   {
     slug: "dues-collection",

@@ -7,15 +7,19 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Building2, CalendarRange, Check, ChevronDown, Clock3, Plus } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { setActivePeriod } from "@/app/actions/periods";
-import { AGENTS } from "@/lib/agents";
+import { LayoutDashboard } from "lucide-react";
+import { AGENTS, AgentProfile } from "@/lib/agents";
 
-const TABS = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/budget", label: "Budget" },
-  { href: "/actuals", label: "Plan vs Actual" },
-  { href: "/members", label: "Members" },
-  { href: "/scenarios", label: "Scenarios" },
-];
+/** The agent whose workspace the current path belongs to, if any. */
+function activeAgentFor(pathname: string): AgentProfile | undefined {
+  return AGENTS.find((a) =>
+    a.navTabs
+      ? a.navTabs.some(
+          (t) => pathname === t.href || pathname.startsWith(t.href + "/")
+        )
+      : pathname.startsWith(a.href)
+  );
+}
 
 export interface PeriodOption {
   id: number;
@@ -34,10 +38,12 @@ export default function Header({
   activePeriodId: number | null;
 }) {
   const pathname = usePathname();
+  const activeAgent = activeAgentFor(pathname);
+  const onDashboard = pathname.startsWith("/dashboard");
 
   return (
     <header className="sticky top-0 z-40 border-b border-border/60 bg-background/85 backdrop-blur-xl">
-      {/* Row 1 — brand + tabs + account */}
+      {/* Row 1 — brand + home + account */}
       <div className="mx-auto flex h-14 max-w-6xl items-center gap-4 px-4 sm:px-6">
         <Link
           href="/dashboard"
@@ -46,23 +52,18 @@ export default function Header({
           Simple<span className="text-primary">Dues</span>
         </Link>
 
-        <nav className="-mx-1 flex flex-1 items-center gap-1 overflow-x-auto px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-center">
-          {TABS.map((tab) => {
-            const active = pathname.startsWith(tab.href);
-            return (
-              <Link
-                key={tab.href}
-                href={tab.href}
-                className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  active
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                {tab.label}
-              </Link>
-            );
-          })}
+        <nav className="flex flex-1 items-center">
+          <Link
+            href="/dashboard"
+            className={`inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+              onDashboard
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <LayoutDashboard className="h-4 w-4" />
+            Dashboard
+          </Link>
         </nav>
 
         <div className="flex flex-shrink-0 items-center gap-3">
@@ -83,10 +84,7 @@ export default function Header({
       <div className="border-t border-border/40">
         <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-center sm:px-6">
           {AGENTS.map((agent) => {
-            const active =
-              agent.status === "active"
-                ? TABS.some((t) => pathname.startsWith(t.href))
-                : pathname.startsWith(agent.href);
+            const active = agent.slug === activeAgent?.slug;
             return (
               <Link
                 key={agent.slug}
@@ -97,7 +95,7 @@ export default function Header({
                     : `${agent.name} — ${agent.role}, coming soon`
                 }
                 className={`flex flex-shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3.5 transition-colors ${
-                  active ? "bg-muted" : "hover:bg-muted/60"
+                  active ? "bg-muted ring-1 ring-border" : "hover:bg-muted/60"
                 }`}
               >
                 <span className="relative h-9 w-9 overflow-hidden rounded-full border border-border">
@@ -127,6 +125,34 @@ export default function Header({
           })}
         </div>
       </div>
+
+      {/* Row 3 — the selected agent's sub-tabs (only while inside their workspace) */}
+      {activeAgent?.navTabs && (
+        <div className="border-t border-border/40 bg-muted/30">
+          <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-4 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:justify-center sm:px-6">
+            <span className="mr-1 hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:inline">
+              {activeAgent.name}
+            </span>
+            {activeAgent.navTabs.map((tab) => {
+              const active =
+                pathname === tab.href || pathname.startsWith(tab.href + "/");
+              return (
+                <Link
+                  key={tab.href}
+                  href={tab.href}
+                  className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-semibold transition-colors ${
+                    active
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </header>
   );
 }
