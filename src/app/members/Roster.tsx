@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { BellRing, RotateCcw, Trash2 } from "lucide-react";
+import { BellRing, RotateCcw, Search, Trash2 } from "lucide-react";
 import { addMember, updateMember, setMemberStatus } from "@/app/actions/members";
 import { MemberRow } from "@/lib/db";
 import { MemberStatus, MEMBER_STATUSES, isActiveMember } from "@/lib/memberStatus";
+import { CustomCategory } from "@/lib/memberDues";
 import { inputCls } from "@/components/AuthShell";
 import { ImportMembersButton } from "./ImportMembers";
+import { CategoryManagerButton } from "./CategoryManager";
 
 // "Actives" is a derived umbrella — Brothers + Pledges — not a stored category.
 type Filter = "all" | "actives" | MemberStatus;
@@ -32,11 +34,36 @@ const labelFor = (s: MemberStatus) =>
 // You can add a member as any category except the Trash bin.
 const ADD_STATUSES = MEMBER_STATUSES.filter((s) => s.value !== "trash");
 
+// Intended category order (Brother → Pledge → Alumni → …) for the Category sort.
+const STATUS_ORDER = Object.fromEntries(
+  MEMBER_STATUSES.map((s, i) => [s.value, i])
+) as Record<MemberStatus, number>;
+
+type SortKey = "name-asc" | "name-desc" | "category" | "recent";
+const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
+  { key: "name-asc", label: "Name A–Z" },
+  { key: "name-desc", label: "Name Z–A" },
+  { key: "category", label: "Category" },
+  { key: "recent", label: "Recently added" },
+];
+
 const ROW_GRID = "sm:grid-cols-[1.5fr_1.8fr_1.2fr_6rem_3.5rem]";
 const DRAG_MIME = "text/plain";
 
-export default function Roster({ members }: { members: MemberRow[] }) {
+export default function Roster({
+  members,
+  categories,
+  defaultCollectionRate,
+}: {
+  members: MemberRow[];
+  categories: CustomCategory[];
+  /** The period's overall collection rate (0..1) — seeds a new tier's rate. */
+  defaultCollectionRate: number;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
+  const [tagFilter, setTagFilter] = useState<string>(""); // "" = no tag filter
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<SortKey>("name-asc");
   const [copied, setCopied] = useState("");
   const [dragOver, setDragOver] = useState<MemberStatus | null>(null);
   const [toast, setToast] = useState<{
@@ -46,15 +73,52 @@ export default function Roster({ members }: { members: MemberRow[] }) {
   } | null>(null);
   const [, startTransition] = useTransition();
 
-  const filtered = useMemo(
-    () =>
+  const catMap = useMemo(
+    () => new Map(categories.map((c) => [c.id, c])),
+    [categories]
+  );
+  // Promoted tiers — first-class member groups with their own card + budget line.
+  const tierCats = useMemo(
+    () => categories.filter((c) => c.tier && c.dues.rule !== "inherit"),
+    [categories]
+  );
+
+  const filtered = useMemo(() => {
+    let base =
       filter === "all"
         ? members.filter((m) => m.status !== "trash")
         : filter === "actives"
           ? members.filter((m) => isActiveMember(m.status))
-          : members.filter((m) => m.status === filter),
-    [members, filter]
-  );
+          : members.filter((m) => m.status === filter);
+    if (tagFilter) base = base.filter((m) => m.tags.includes(tagFilter));
+
+    const q = query.trim().toLowerCase();
+    const matched = q
+      ? base.filter(
+          (m) =>
+            m.name.toLowerCase().includes(q) ||
+            m.email.toLowerCase().includes(q) ||
+            m.phone.toLowerCase().includes(q) ||
+            m.tags.some((id) => catMap.get(id)?.name.toLowerCase().includes(q))
+        )
+      : base;
+
+    return [...matched].sort((a, b) => {
+      switch (sort) {
+        case "name-desc":
+          return b.name.localeCompare(a.name);
+        case "recent":
+          return b.id - a.id;
+        case "category":
+          return (
+            STATUS_ORDER[a.status] - STATUS_ORDER[b.status] ||
+            a.name.localeCompare(b.name)
+          );
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
+  }, [members, filter, tagFilter, query, sort, catMap]);
 
   const counts = MEMBER_STATUSES.map((s) => ({
     ...s,
@@ -190,6 +254,43 @@ export default function Roster({ members }: { members: MemberRow[] }) {
         })}
       </section>
 
+      {/* Tier cards — user-defined member groups, peers of the categories above */}
+      {tierCats.length > 0 && (
+        <section className="mb-6">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Tiers
+          </p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {tierCats.map((t) => {
+              const n = members.filter(
+                (m) => m.status !== "trash" && m.tags.includes(t.id)
+              ).length;
+              const active = tagFilter === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => {
+                    setFilter("all");
+                    setTagFilter((f) => (f === t.id ? "" : t.id));
+                  }}
+                  className={`rounded-2xl p-5 text-left transition-colors ${
+                    active
+                      ? "border border-primary/50 bg-primary/5"
+                      : "glass hover:border-primary/40"
+                  }`}
+                >
+                  <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <span className={`cat-chip cat-${t.color} h-2.5 w-2.5 rounded-full`} />
+                    <span className="truncate">{t.plural || t.name}</span>
+                  </p>
+                  <p className="mt-1.5 text-2xl font-semibold text-foreground">{n}</p>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Toolbar */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap rounded-full border border-border bg-card p-0.5">
@@ -209,6 +310,10 @@ export default function Roster({ members }: { members: MemberRow[] }) {
         </div>
         <div className="flex-1" />
         {copied && <span className="text-sm text-money-up">{copied}</span>}
+        <CategoryManagerButton
+          categories={categories}
+          defaultCollectionRate={defaultCollectionRate}
+        />
         <ImportMembersButton />
         <button
           onClick={() => copy("emails")}
@@ -239,6 +344,58 @@ export default function Roster({ members }: { members: MemberRow[] }) {
 
       {/* Roster table */}
       <section className="glass overflow-hidden rounded-[1.5rem]">
+        {/* Search + sort */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-4 py-3">
+          <div className="relative min-w-[11rem] flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name, email, or phone"
+              aria-label="Search members"
+              className="w-full rounded-full border border-input bg-background py-1.5 pl-9 pr-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
+            />
+          </div>
+          {query.trim() && (
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              {filtered.length} match{filtered.length === 1 ? "" : "es"}
+            </span>
+          )}
+          <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+            Sort
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              aria-label="Sort members"
+              className="rounded-full border border-input bg-background py-1.5 pl-3 pr-7 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {categories.length > 0 && (
+            <label className="flex items-center gap-1.5 whitespace-nowrap text-xs text-muted-foreground">
+              Tag
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                aria-label="Filter by tag"
+                className="rounded-full border border-input bg-background py-1.5 pl-3 pr-7 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
+              >
+                <option value="">All</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
         <div className={`hidden gap-3 border-b border-border/60 px-5 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground sm:grid ${ROW_GRID}`}>
           <span>Name</span>
           <span>Email</span>
@@ -250,9 +407,11 @@ export default function Roster({ members }: { members: MemberRow[] }) {
           <p className="py-8 text-center text-sm text-muted-foreground/70">
             {members.length === 0
               ? "No members yet — add them below, or Import a list up top."
-              : filter === "trash"
-                ? "Trash is empty."
-                : "No members in this category."}
+              : query.trim()
+                ? `No members match "${query.trim()}".`
+                : filter === "trash"
+                  ? "Trash is empty."
+                  : "No members in this category."}
           </p>
         )}
         <div className="divide-y divide-border/40">
@@ -260,6 +419,8 @@ export default function Roster({ members }: { members: MemberRow[] }) {
             <MemberLine
               key={m.id}
               member={m}
+              categories={categories}
+              catMap={catMap}
               onTrash={trashMember}
               onRestore={restoreMember}
             />
@@ -295,15 +456,28 @@ export default function Roster({ members }: { members: MemberRow[] }) {
 
 function MemberLine({
   member,
+  categories,
+  catMap,
   onTrash,
   onRestore,
 }: {
   member: MemberRow;
+  categories: CustomCategory[];
+  catMap: Map<string, CustomCategory>;
   onTrash: (m: MemberRow) => void;
   onRestore: (m: MemberRow) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [tags, setTags] = useState<string[]>(member.tags);
   const [isPending, startTransition] = useTransition();
+
+  const openEdit = () => {
+    setTags(member.tags);
+    setEditing(true);
+  };
+  const memberChips = member.tags
+    .map((id) => catMap.get(id))
+    .filter((c): c is CustomCategory => Boolean(c));
 
   if (editing) {
     return (
@@ -314,35 +488,62 @@ function MemberLine({
             setEditing(false);
           })
         }
-        className={`grid items-center gap-2 bg-accent/30 px-5 py-3 ${ROW_GRID}`}
+        className="space-y-2 bg-accent/30 px-5 py-3"
       >
         <input type="hidden" name="id" value={member.id} />
-        <input name="name" defaultValue={member.name} required className={inputCls} />
-        <input name="email" type="email" defaultValue={member.email} placeholder="email" className={inputCls} />
-        <input name="phone" defaultValue={member.phone} placeholder="phone" className={inputCls} />
-        <select name="status" defaultValue={member.status} className={inputCls}>
-          {MEMBER_STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-        <div className="flex justify-end gap-1.5">
-          <button
-            type="submit"
-            disabled={isPending}
-            className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {isPending ? "…" : "Save"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="rounded-full border border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted"
-          >
-            ✕
-          </button>
+        <input type="hidden" name="tags" value={JSON.stringify(tags)} />
+        <div className={`grid items-center gap-2 ${ROW_GRID}`}>
+          <input name="name" defaultValue={member.name} required className={inputCls} />
+          <input name="email" type="email" defaultValue={member.email} placeholder="email" className={inputCls} />
+          <input name="phone" defaultValue={member.phone} placeholder="phone" className={inputCls} />
+          <select name="status" defaultValue={member.status} className={inputCls}>
+            {MEMBER_STATUSES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+          <div className="flex justify-end gap-1.5">
+            <button
+              type="submit"
+              disabled={isPending}
+              className="rounded-full bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              {isPending ? "…" : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(false)}
+              className="rounded-full border border-border px-2.5 py-1.5 text-sm text-muted-foreground hover:bg-muted"
+            >
+              ✕
+            </button>
+          </div>
         </div>
+        {categories.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs text-muted-foreground">Tags</span>
+            {categories.map((c) => {
+              const on = tags.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() =>
+                    setTags((t) =>
+                      on ? t.filter((x) => x !== c.id) : [...t, c.id]
+                    )
+                  }
+                  className={`cat-chip cat-${c.color} rounded-full px-2 py-0.5 text-xs font-medium transition-opacity ${
+                    on ? "" : "opacity-40 hover:opacity-75"
+                  }`}
+                >
+                  {c.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </form>
     );
   }
@@ -358,20 +559,34 @@ function MemberLine({
         e.dataTransfer.setData(DRAG_MIME, String(member.id));
         e.dataTransfer.effectAllowed = "move";
       }}
-      onClick={() => setEditing(true)}
+      onClick={openEdit}
       onKeyDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
-          setEditing(true);
+          openEdit();
         }
       }}
       title="Click to edit · drag to a category to move"
       className={`group grid cursor-pointer items-center gap-3 px-5 py-3 transition-colors hover:bg-muted/40 ${ROW_GRID}`}
     >
-      <span className="truncate text-sm font-medium text-foreground">
-        {member.name}
-      </span>
+      <div className="min-w-0">
+        <span className="block truncate text-sm font-medium text-foreground">
+          {member.name}
+        </span>
+        {memberChips.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {memberChips.map((c) => (
+              <span
+                key={c.id}
+                className={`cat-chip cat-${c.color} rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none`}
+              >
+                {c.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
       <span className="truncate text-sm text-muted-foreground">
         {member.email || <span className="text-muted-foreground/40">—</span>}
       </span>

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { setActualAmount, setBillPaid } from "@/app/actions/budget";
 import { BudgetItemRow, MemberRow, PeriodRow } from "@/lib/db";
 import { buildForecast, fmtUSD, fmtDate, occurrences } from "@/lib/forecast";
-import { memberDuesAmount } from "@/lib/memberDues";
+import { memberDuesWithTags, memberTier, isBillableMember } from "@/lib/memberDues";
 
 export default function Actuals({
   period,
@@ -58,19 +58,25 @@ export default function Actuals({
 
   // Income side: billed (full roster obligation) vs collected (paid checkboxes).
   const duesOf = (m: MemberRow) =>
-    memberDuesAmount(
+    memberDuesWithTags(
       m.status,
+      m.tags,
+      period.custom_categories,
       m.aid_plan,
       m.aid_amount,
       period.dues_plans,
       period.active_dues,
       period.pledge_dues
     );
-  const dueMembers = members.filter(
-    (m) => m.status === "brother" || m.status === "pledge"
+  // Billable = brothers, pledges, and anyone in a promoted tier (e.g. a
+  // dues-paying alumnus). Tier members are billed but counted under their tier.
+  const tierOf = (m: MemberRow) => memberTier(m.tags, period.custom_categories);
+  const dueMembers = members.filter((m) =>
+    isBillableMember(m.status, m.tags, period.custom_categories)
   );
-  const brotherMembers = members.filter((m) => m.status === "brother");
-  const pledgeMembers = members.filter((m) => m.status === "pledge");
+  const brotherMembers = members.filter((m) => m.status === "brother" && !tierOf(m));
+  const pledgeMembers = members.filter((m) => m.status === "pledge" && !tierOf(m));
+  const tierMembers = members.filter((m) => m.status !== "trash" && tierOf(m) != null);
   const billed = dueMembers.reduce((s, m) => s + duesOf(m), 0);
   const collected = dueMembers
     .filter((m) => m.dues_paid === 1)
@@ -79,7 +85,12 @@ export default function Actuals({
   const paidCount = dueMembers.filter((m) => m.dues_paid === 1).length;
   const unpaid = dueMembers
     .filter((m) => m.dues_paid !== 1 && duesOf(m) > 0)
-    .map((m) => ({ id: m.id, name: m.name, status: m.status, amount: duesOf(m) }))
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      label: tierOf(m)?.plural ?? tierOf(m)?.name ?? (m.status === "pledge" ? "pledge" : "brother"),
+      amount: duesOf(m),
+    }))
     .sort((a, b) => b.amount - a.amount);
   const actualCollectedPct = billed > 0 ? Math.round((collected / billed) * 100) : 0;
   const plannedCollectionPct = Math.round(period.collection_rate * 100);
@@ -224,7 +235,9 @@ export default function Actuals({
           <Stat
             label="Billed"
             value={fmtUSD(billed)}
-            sub={`${brotherMembers.length} brothers + ${pledgeMembers.length} pledges`}
+            sub={`${brotherMembers.length} brothers + ${pledgeMembers.length} pledges${
+              tierMembers.length ? ` + ${tierMembers.length} tier` : ""
+            }`}
           />
           <Stat label="Collected" value={fmtUSD(collected)} sub={`${actualCollectedPct}% of billed`} tone="good" />
           <Stat
@@ -266,9 +279,7 @@ export default function Actuals({
                 <li key={m.id} className="flex items-center justify-between gap-3 text-sm">
                   <span className="truncate text-foreground">
                     {m.name}
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      {m.status === "pledge" ? "pledge" : "brother"}
-                    </span>
+                    <span className="ml-2 text-xs text-muted-foreground">{m.label}</span>
                   </span>
                   <span className="font-money font-medium text-money-down">{fmtUSD(m.amount)}</span>
                 </li>

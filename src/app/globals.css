@@ -76,6 +76,14 @@
   --warning: oklch(0.82 0.15 80);
   --warning-foreground: oklch(0.2 0.05 80);
 
+  /* Custom-category chip hues (dark) — luminous, distinct, legible on glass */
+  --cat-mint: oklch(0.82 0.17 165);
+  --cat-blue: oklch(0.72 0.13 240);
+  --cat-violet: oklch(0.74 0.15 300);
+  --cat-amber: oklch(0.82 0.15 80);
+  --cat-rose: oklch(0.74 0.18 12);
+  --cat-slate: oklch(0.72 0.025 260);
+
   /* Lines */
   --border: oklch(0.32 0.012 265);
   --border-strong: oklch(0.42 0.014 265);
@@ -118,6 +126,14 @@
 
   --warning: oklch(0.72 0.11 75);
   --warning-foreground: oklch(0.3 0.06 75);
+
+  /* Category chip hues (light) — darkened so text clears contrast on white */
+  --cat-mint: oklch(0.55 0.13 165);
+  --cat-blue: oklch(0.52 0.14 240);
+  --cat-violet: oklch(0.52 0.16 300);
+  --cat-amber: oklch(0.58 0.12 75);
+  --cat-rose: oklch(0.55 0.18 12);
+  --cat-slate: oklch(0.5 0.02 260);
 
   --border: oklch(0.915 0.004 258);
   --border-strong: oklch(0.86 0.005 258);
@@ -361,6 +377,19 @@
 .theme-icon-light { display: none; }
 .light .theme-icon-dark { display: none; }
 .light .theme-icon-light { display: inline-block; }
+
+/* Custom-category chips — one tone class sets --cat, .cat-chip paints it. */
+.cat-chip {
+  background: color-mix(in oklch, var(--cat, var(--cat-slate)) 16%, transparent);
+  color: var(--cat, var(--cat-slate));
+  border: 1px solid color-mix(in oklch, var(--cat, var(--cat-slate)) 32%, transparent);
+}
+.cat-mint { --cat: var(--cat-mint); }
+.cat-blue { --cat: var(--cat-blue); }
+.cat-violet { --cat: var(--cat-violet); }
+.cat-amber { --cat: var(--cat-amber); }
+.cat-rose { --cat: var(--cat-rose); }
+.cat-slate { --cat: var(--cat-slate); }
 
 /* ── Focus — mint ring + soft halo, both themes ─────────────────────────── */
 :where(input, select, textarea):focus-visible {

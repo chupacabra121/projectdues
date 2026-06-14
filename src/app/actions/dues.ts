@@ -1,7 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb, getActivePeriod, recomputeDerivedDues } from "@/lib/db";
+import {
+  getDb,
+  getActivePeriod,
+  recomputeDerivedDues,
+  parseCustomCategories,
+  parseMemberTags,
+} from "@/lib/db";
 import { MAX_DUES_PLANS } from "@/lib/memberDues";
 import { requireUser } from "@/lib/auth";
 
@@ -10,6 +16,7 @@ const PATHS = [
   "/budget",
   "/actuals",
   "/dues",
+  "/members",
   "/scenarios",
   "/periods",
   "/collections",
@@ -124,6 +131,36 @@ export async function setDuesPlans(formData: FormData): Promise<void> {
   getDb()
     .prepare("UPDATE periods SET dues_plans = ? WHERE id = ? AND user_id = ?")
     .run(JSON.stringify(plans), period.id, user.id);
+  recomputeDerivedDues(user.id, period.id);
+  revalidateAll();
+}
+
+/**
+ * Save the period's custom member categories (tags). The client sends the full
+ * list as JSON; parseCustomCategories sanitizes every field + drops dup ids.
+ * Recomputes dues since a category's rule can re-price tagged members.
+ */
+export async function setCustomCategories(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const period = getActivePeriod(user.id);
+  if (!period) return;
+  const cats = parseCustomCategories(formData.get("categories"));
+  const db = getDb();
+  db.prepare(
+    "UPDATE periods SET custom_categories = ? WHERE id = ? AND user_id = ?"
+  ).run(JSON.stringify(cats), period.id, user.id);
+  // Prune now-orphaned tag ids so a deleted category doesn't linger invisibly
+  // on members (keeps the roster's tags in sync with the surviving categories).
+  const validIds = new Set(cats.map((c) => c.id));
+  const roster = db
+    .prepare("SELECT id, tags FROM members WHERE user_id = ? AND period_id = ?")
+    .all(user.id, period.id) as { id: number; tags: string }[];
+  const prune = db.prepare("UPDATE members SET tags = ? WHERE id = ? AND user_id = ?");
+  for (const m of roster) {
+    const orig = parseMemberTags(m.tags);
+    const kept = orig.filter((id) => validIds.has(id));
+    if (kept.length !== orig.length) prune.run(JSON.stringify(kept), m.id, user.id);
+  }
   recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
