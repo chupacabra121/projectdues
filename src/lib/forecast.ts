@@ -4,6 +4,23 @@
  * preview, what-if controls).
  */
 
+/** An active member on financial aid who pays a custom, reduced dues amount. */
+export interface AidMember {
+  name: string;
+  amount: number;
+}
+
+/**
+ * How active dues break down: a majority paying the full rate, plus any
+ * financial-aid members who each pay an individual amount. When present this
+ * supersedes the flat active_members × active_dues calculation.
+ */
+export interface ActiveDuesBreakdown {
+  fullCount: number;
+  fullRate: number;
+  aid: AidMember[];
+}
+
 export interface ForecastSettings {
   active_members: number;
   current_pledges: number;
@@ -20,6 +37,24 @@ export interface ForecastSettings {
   semester_end: string;
   /** When dues arrive: sixweek | upfront | monthly | thirds. */
   dues_schedule?: string;
+  /** Full-dues + financial-aid split; falls back to the flat fields if null. */
+  active_dues_breakdown?: ActiveDuesBreakdown | null;
+}
+
+/** Total active dues billed before collection rate (full tier + aid members). */
+export function activeDuesGross(s: ForecastSettings): number {
+  const b = s.active_dues_breakdown;
+  if (b) {
+    return b.fullCount * b.fullRate + b.aid.reduce((sum, a) => sum + a.amount, 0);
+  }
+  return s.active_members * s.active_dues;
+}
+
+/** Total active headcount, full-dues plus aid members. */
+export function activeMemberCount(s: ForecastSettings): number {
+  const b = s.active_dues_breakdown;
+  if (b) return b.fullCount + b.aid.length;
+  return s.active_members;
 }
 
 export interface ForecastItem {
@@ -68,8 +103,7 @@ export interface Insight {
 
 export function revenueFor(s: ForecastSettings, pledgeCount: number): number {
   return (
-    (s.active_members * s.active_dues + pledgeCount * s.pledge_dues) *
-    s.collection_rate
+    (activeDuesGross(s) + pledgeCount * s.pledge_dues) * s.collection_rate
   );
 }
 

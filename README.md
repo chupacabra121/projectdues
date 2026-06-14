@@ -46,7 +46,9 @@ finia.ro.
   membership, dues, collection rate, all three pledge-class scenarios,
   balances, reserve target, and the semester window — with debounced
   auto-save and the forecast recalculating live as you type, plus an *Other
-  Income* list for fundraisers, donations, and allocations. *Fixed
+  Income* list for fundraisers, donations, and allocations. Active dues split into a **full-dues tier** plus individual
+  **financial-aid members** who each pay a custom amount (recurs across
+  semesters via carry-over). *Fixed
   Obligations* (things we must pay) and *Planned Events* (things we want to
   do) sit below, with inline click-to-edit on every item. Items are
   auto-categorized with manual override; obligations support one-time,

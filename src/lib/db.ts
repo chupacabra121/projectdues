@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
+import { ActiveDuesBreakdown } from "./forecast";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -92,6 +93,7 @@ function createDb(): Database.Database {
       dues_collected REAL NOT NULL DEFAULT 0,
       reserve_target REAL NOT NULL DEFAULT 0,
       dues_schedule TEXT NOT NULL DEFAULT 'sixweek',
+      active_dues_breakdown TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_periods_user ON periods(user_id);
@@ -102,8 +104,38 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "settings", "active_period_id", "INTEGER");
   addColumnIfMissing(db, "budget_items", "period_id", "INTEGER");
   addColumnIfMissing(db, "members", "period_id", "INTEGER");
+  addColumnIfMissing(db, "periods", "active_dues_breakdown", "TEXT");
   migrateToPeriods(db);
   return db;
+}
+
+/** Parse the stored active-dues breakdown JSON into a typed value (or null). */
+export function parseActiveDuesBreakdown(
+  raw: unknown
+): ActiveDuesBreakdown | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!p || !Array.isArray(p.aid)) return null;
+    return {
+      fullCount: Math.max(0, Math.round(Number(p.fullCount) || 0)),
+      fullRate: Math.max(0, Number(p.fullRate) || 0),
+      aid: p.aid.map((a: { name?: unknown; amount?: unknown }) => ({
+        name: String(a?.name ?? "").slice(0, 80),
+        amount: Math.max(0, Number(a?.amount) || 0),
+      })),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Hydrate a raw periods row: parse the breakdown JSON into a typed field. */
+function hydratePeriod(row: Record<string, unknown>): PeriodRow {
+  return {
+    ...(row as unknown as PeriodRow),
+    active_dues_breakdown: parseActiveDuesBreakdown(row.active_dues_breakdown),
+  };
 }
 
 /** Auto-name a period from its start date: "Spring 2026", "Fall 2026", … */
@@ -301,6 +333,8 @@ export interface PeriodRow {
   dues_collected: number;
   reserve_target: number;
   dues_schedule: string;
+  /** Parsed by the getters; null = flat active_members × active_dues. */
+  active_dues_breakdown: ActiveDuesBreakdown | null;
 }
 
 export interface BudgetItemRow {
@@ -353,11 +387,12 @@ export function getMembers(userId: number, periodId: number): MemberRow[] {
 }
 
 export function getPeriods(userId: number): PeriodRow[] {
-  return getDb()
+  const rows = getDb()
     .prepare(
       "SELECT * FROM periods WHERE user_id = ? ORDER BY semester_start DESC, id DESC"
     )
-    .all(userId) as PeriodRow[];
+    .all(userId) as Record<string, unknown>[];
+  return rows.map(hydratePeriod);
 }
 
 /** The period the treasurer is working in — falls back to the most recent. */
@@ -366,8 +401,8 @@ export function getActivePeriod(userId: number): PeriodRow | undefined {
   if (settings?.active_period_id != null) {
     const p = getDb()
       .prepare("SELECT * FROM periods WHERE id = ? AND user_id = ?")
-      .get(settings.active_period_id, userId) as PeriodRow | undefined;
-    if (p) return p;
+      .get(settings.active_period_id, userId) as Record<string, unknown> | undefined;
+    if (p) return hydratePeriod(p);
   }
   return getPeriods(userId)[0];
 }

@@ -107,9 +107,16 @@ export async function completeOnboarding(
   redirect("/dashboard");
 }
 
+export interface AidMemberInput {
+  name: string;
+  amount: number;
+}
+
 export interface BudgetSettingsPayload {
-  activeMembers: number;
-  activeDues: number;
+  /** Active dues are a full-dues tier plus individual financial-aid members. */
+  activeFullCount: number;
+  activeFullRate: number;
+  aid: AidMemberInput[];
   pledgeDues: number;
   collectionRate: number; // percent, 0-100
   pledgesConservative: number;
@@ -137,18 +144,34 @@ export async function updateBudgetSettings(
   const period = getActivePeriod(user.id);
   if (!period) return;
   const sem = defaultSemester();
+
+  // The active-dues breakdown is the source of truth; derive the flat
+  // active_members / active_dues from it so legacy consumers stay correct.
+  const fullCount = clampInt(payload.activeFullCount);
+  const fullRate = clampMoney(payload.activeFullRate);
+  const aid = (Array.isArray(payload.aid) ? payload.aid : [])
+    .slice(0, 200)
+    .map((a) => ({
+      name: String(a?.name ?? "").trim().slice(0, 80),
+      amount: clampMoney(a?.amount),
+    }));
+  const breakdown = { fullCount, fullRate, aid };
+  const totalActiveMembers = fullCount + aid.length;
+
   getDb()
     .prepare(
       `UPDATE periods SET
-        active_members = ?, active_dues = ?, pledge_dues = ?, collection_rate = ?,
+        active_members = ?, active_dues = ?, active_dues_breakdown = ?,
+        pledge_dues = ?, collection_rate = ?,
         pledges_conservative = ?, pledges_expected = ?, pledges_optimistic = ?,
         starting_balance = ?, dues_collected = ?, reserve_target = ?,
         semester_start = ?, semester_end = ?, dues_schedule = ?
       WHERE id = ? AND user_id = ?`
     )
     .run(
-      clampInt(payload.activeMembers),
-      clampMoney(payload.activeDues),
+      totalActiveMembers,
+      fullRate,
+      JSON.stringify(breakdown),
       clampMoney(payload.pledgeDues),
       Math.min(100, Math.max(0, Number(payload.collectionRate) || 0)) / 100,
       clampInt(payload.pledgesConservative),

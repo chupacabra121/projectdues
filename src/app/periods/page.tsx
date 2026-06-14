@@ -6,7 +6,7 @@ import {
   getPeriods,
   PeriodRow,
 } from "@/lib/db";
-import { fmtDate, fmtUSD } from "@/lib/forecast";
+import { fmtDate, fmtUSD, revenueFor } from "@/lib/forecast";
 import AppShell from "@/components/AppShell";
 import { CreatePeriodForm, PeriodActions } from "./PeriodControls";
 
@@ -103,10 +103,7 @@ export default async function PeriodsPage() {
 }
 
 function revenueOf(p: PeriodRow): number {
-  return (
-    (p.active_members * p.active_dues + p.pledges_expected * p.pledge_dues) *
-    p.collection_rate
-  );
+  return revenueFor(p, p.pledges_expected);
 }
 
 /** Propose the semester after the most recent period (fall ↔ spring). */

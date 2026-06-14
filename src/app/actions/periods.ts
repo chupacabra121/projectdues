@@ -82,8 +82,9 @@ export async function createPeriod(formData: FormData): Promise<void> {
             active_members, current_pledges,
             pledges_conservative, pledges_expected, pledges_optimistic,
             active_dues, pledge_dues, collection_rate,
-            starting_balance, dues_collected, reserve_target, dues_schedule
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`
+            starting_balance, dues_collected, reserve_target, dues_schedule,
+            active_dues_breakdown
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?)`
         )
         .run(
           user.id,
@@ -99,7 +100,10 @@ export async function createPeriod(formData: FormData): Promise<void> {
           base?.pledge_dues ?? 0,
           base?.collection_rate ?? 0.95,
           base?.reserve_target ?? 0,
-          base?.dues_schedule ?? "sixweek"
+          base?.dues_schedule ?? "sixweek",
+          base?.active_dues_breakdown
+            ? JSON.stringify(base.active_dues_breakdown)
+            : null
         ).lastInsertRowid
     );
 
