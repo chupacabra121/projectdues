@@ -156,89 +156,108 @@ export default function Workbench({
       </section>
 
       {/* Money In */}
-      <section id="money-in" className="mb-6 rounded-[1.5rem] border border-border bg-card p-6">
-        <div className="mb-1 flex items-baseline justify-between">
+      <section id="money-in" className="mb-6 rounded-[1.5rem] border border-border bg-card p-6 sm:p-7">
+        <div className="mb-1 flex items-baseline justify-between gap-3">
           <h2 className="font-semibold text-foreground">Money In</h2>
           <span className="text-lg font-semibold text-primary">
             {fmtUSD(forecast.totalIncome)}
           </span>
         </div>
-        <p className="mb-5 text-sm text-muted-foreground">
-          Membership, dues, and any other income for the semester
+        <p className="mb-6 text-sm text-muted-foreground">
+          Who&apos;s paying dues this semester, plus any other income.
         </p>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Field label="Active Members" value={s.activeMembers} onChange={set("activeMembers")} />
-          <Field label="Active Dues" value={s.activeDues} onChange={set("activeDues")} prefix="$" />
-          <Field label="Pledge Dues" value={s.pledgeDues} onChange={set("pledgeDues")} prefix="$" />
-          <Field label="Collection Rate" value={s.collectionRate} onChange={set("collectionRate")} suffix="%" max={100} />
-          <div>
-            <label className="mb-1 block text-sm font-medium text-foreground/80">
-              Dues Arrive
-            </label>
-            <select
-              value={s.duesSchedule}
-              onChange={(e) => setS((prev) => ({ ...prev, duesSchedule: e.target.value }))}
-              className={inputCls}
-            >
-              <option value="sixweek">Evenly over first 6 weeks</option>
-              <option value="upfront">All at semester start</option>
-              <option value="monthly">Monthly installments</option>
-              <option value="thirds">⅓ deposit + 2 installments</option>
-            </select>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Drives the cash curve on the dashboard.
+        {/* Dues — each member group keeps its headcount next to its own dues */}
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Dues
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <RevenueGroup
+            title="Active members"
+            countValue={s.activeMembers}
+            onCount={set("activeMembers")}
+            countNoun="members"
+            duesValue={s.activeDues}
+            onDues={set("activeDues")}
+            perNoun="member"
+            subtotal={activesSubtotal}
+          />
+          <RevenueGroup
+            title="Expected new pledges"
+            countValue={s.expected}
+            onCount={set("expected")}
+            countNoun="pledges"
+            duesValue={s.pledgeDues}
+            onDues={set("pledgeDues")}
+            perNoun="pledge"
+            subtotal={pledgesSubtotal}
+            highlight
+          />
+        </div>
+
+        {/* Collection rate → projected dues */}
+        <div className="mt-4 rounded-2xl border border-border bg-muted/30 p-4">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-sm font-medium text-foreground">Collection rate</span>
+              <div className="relative w-[4.5rem]">
+                <input
+                  type="number" min={0} max={100}
+                  value={s.collectionRate}
+                  onChange={set("collectionRate")}
+                  className={`${inputCls} pr-6 text-center font-semibold`}
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+              </div>
+            </div>
+            <input
+              type="range" min={0} max={100}
+              value={Math.min(100, int(s.collectionRate))}
+              onChange={set("collectionRate")}
+              aria-label="Collection rate"
+              className="h-2 min-w-[160px] flex-1 cursor-pointer accent-[var(--primary)]"
+            />
+            <p className="text-xs text-muted-foreground">
+              Most chapters collect 90–97%.
+              {haircut > 0 && (
+                <>
+                  {" · "}
+                  <span className="font-medium text-destructive">−{fmtUSD(haircut)}</span>{" "}
+                  uncollected
+                </>
+              )}
             </p>
+          </div>
+          <div className="mt-3 flex items-baseline justify-between border-t border-border/60 pt-3">
+            <span className="text-sm font-medium text-foreground">Projected dues revenue</span>
+            <span className="text-lg font-semibold text-primary">
+              {fmtUSD(forecast.projectedRevenue)}
+            </span>
           </div>
         </div>
 
-        <p className="mb-3 mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          New Pledge Class — three scenarios
-        </p>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Conservative" value={s.conservative} onChange={set("conservative")}
-            hint={`→ ${fmtUSD(revenueFor(live, int(s.conservative)))} revenue`} />
-          <Field label="Expected" value={s.expected} onChange={set("expected")}
-            hint={`→ ${fmtUSD(revenueFor(live, int(s.expected)))} revenue`} highlight />
-          <Field label="Optimistic" value={s.optimistic} onChange={set("optimistic")}
-            hint={`→ ${fmtUSD(revenueFor(live, int(s.optimistic)))} revenue`} />
+        {/* Recruitment outlook — the range that powers the scenarios below */}
+        <div className="mt-6">
+          <p className="mb-1 text-sm font-medium text-foreground">Recruitment outlook</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Your budget assumes {int(s.expected)} new pledge{int(s.expected) === 1 ? "" : "s"}.
+            Set a low and high to stress-test the scenarios at the bottom of the page.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <RangeStat label="Conservative" value={s.conservative}
+              onChange={set("conservative")} revenue={revenueFor(live, int(s.conservative))} />
+            <RangeStat label="Expected" value={s.expected}
+              revenue={revenueFor(live, int(s.expected))} budget />
+            <RangeStat label="Optimistic" value={s.optimistic}
+              onChange={set("optimistic")} revenue={revenueFor(live, int(s.optimistic))} />
+          </div>
         </div>
 
-        <p className="mb-3 mt-6 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Balances & targets
-        </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <Field label="Starting Balance" value={s.startingBalance} onChange={set("startingBalance")} prefix="$" />
-          <Field label="Dues Collected So Far" value={s.duesCollected} onChange={set("duesCollected")} prefix="$" />
-          <Field label="Reserve Target" value={s.reserveTarget} onChange={set("reserveTarget")} prefix="$" />
-          <Field label="Semester Start" value={s.semesterStart} onChange={set("semesterStart")} type="date" />
-          <Field label="Semester End" value={s.semesterEnd} onChange={set("semesterEnd")} type="date" />
-        </div>
-
-        {/* Dues math, spelled out */}
-        <div className="mt-6 rounded-2xl bg-muted/60 px-4 py-3 text-sm leading-6 text-muted-foreground">
-          {int(s.activeMembers)} actives × {fmtUSD(live.active_dues)} ={" "}
-          <span className="font-medium text-foreground">{fmtUSD(activesSubtotal)}</span>
-          {" + "}
-          {int(s.expected)} pledges × {fmtUSD(live.pledge_dues)} ={" "}
-          <span className="font-medium text-foreground">{fmtUSD(pledgesSubtotal)}</span>
-          {" − "}
-          <span className="text-destructive">{fmtUSD(haircut)}</span> uncollected (
-          {Math.round((1 - live.collection_rate) * 100)}%)
-          {forecast.otherIncome > 0 && (
-            <>
-              {" + "}
-              <span className="font-medium text-primary">{fmtUSD(forecast.otherIncome)}</span>{" "}
-              other income
-            </>
-          )}
-          {" = "}
-          <span className="font-semibold text-foreground">{fmtUSD(forecast.totalIncome)}</span>
-        </div>
-
-        <div className="mt-5">
-          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Other Income — fundraisers, donations, allocations
+        {/* Other income */}
+        <div className="mt-6">
+          <p className="mb-1 text-sm font-medium text-foreground">Other income</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Fundraisers, donations, university allocations.
           </p>
           <div className="mb-3 space-y-2">
             {income.map((item) => (
@@ -246,6 +265,57 @@ export default function Workbench({
             ))}
           </div>
           <AddItemForm type="other_income" />
+        </div>
+
+        {/* Total money in */}
+        <div className="mt-6 flex items-baseline justify-between rounded-2xl bg-primary/5 px-4 py-3">
+          <span className="text-sm font-medium text-foreground">Total money in</span>
+          <span className="text-sm text-muted-foreground">
+            {fmtUSD(forecast.projectedRevenue)} dues
+            {forecast.otherIncome > 0 && ` + ${fmtUSD(forecast.otherIncome)} other`} ={" "}
+            <span className="text-lg font-semibold text-primary">
+              {fmtUSD(forecast.totalIncome)}
+            </span>
+          </span>
+        </div>
+
+        {/* Starting position & calendar — set-once context */}
+        <div className="mt-6 border-t border-border/60 pt-6">
+          <p className="mb-3 text-sm font-medium text-foreground">
+            Starting position &amp; calendar
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Field label="Money in the bank now" value={s.startingBalance}
+              onChange={set("startingBalance")} prefix="$" />
+            <Field label="Dues already collected" value={s.duesCollected}
+              onChange={set("duesCollected")} prefix="$"
+              hint="Updates as you record payments on Members." />
+            <Field label="Reserve target" value={s.reserveTarget}
+              onChange={set("reserveTarget")} prefix="$"
+              hint="Cushion to keep at semester's end." />
+            <Field label="Semester start" value={s.semesterStart}
+              onChange={set("semesterStart")} type="date" />
+            <Field label="Semester end" value={s.semesterEnd}
+              onChange={set("semesterEnd")} type="date" />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground/80">
+                Dues arrive
+              </label>
+              <select
+                value={s.duesSchedule}
+                onChange={(e) => setS((prev) => ({ ...prev, duesSchedule: e.target.value }))}
+                className={inputCls}
+              >
+                <option value="sixweek">Evenly over first 6 weeks</option>
+                <option value="upfront">All at semester start</option>
+                <option value="monthly">Monthly installments</option>
+                <option value="thirds">⅓ deposit + 2 installments</option>
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Drives the cash curve.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -526,6 +596,128 @@ function Field({
         )}
       </div>
       {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+/**
+ * One revenue line — a headcount paired with its own per-head dues and a live
+ * subtotal, so "23 members × $650 = $14,950" reads as one thought instead of
+ * scattering the count and the rate across a grid.
+ */
+function RevenueGroup({
+  title,
+  countValue,
+  onCount,
+  countNoun,
+  duesValue,
+  onDues,
+  perNoun,
+  subtotal,
+  highlight,
+}: {
+  title: string;
+  countValue: string;
+  onCount: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  countNoun: string;
+  duesValue: string;
+  onDues: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  perNoun: string;
+  subtotal: number;
+  highlight?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-4 ${
+        highlight ? "border-primary/30 bg-primary/5" : "border-border bg-background"
+      }`}
+    >
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <p className="text-sm font-semibold text-foreground">{title}</p>
+        <p className="text-base font-semibold text-primary">{fmtUSD(subtotal)}</p>
+      </div>
+      <div className="flex items-start gap-2">
+        <label className="flex-1">
+          <span className="mb-1 block text-xs text-muted-foreground">How many</span>
+          <input
+            type="number" min={0}
+            value={countValue}
+            onChange={onCount}
+            className={`${inputCls} text-center font-medium`}
+          />
+          <span className="mt-1 block text-center text-xs text-muted-foreground">
+            {countNoun}
+          </span>
+        </label>
+        <span className="pt-7 text-muted-foreground">×</span>
+        <label className="flex-1">
+          <span className="mb-1 block text-xs text-muted-foreground">Dues each</span>
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+            <input
+              type="number" min={0} step="0.01"
+              value={duesValue}
+              onChange={onDues}
+              className={`${inputCls} pl-7 text-center font-medium`}
+            />
+          </div>
+          <span className="mt-1 block text-center text-xs text-muted-foreground">
+            per {perNoun}
+          </span>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A single pledge-class scenario in the recruitment outlook. Conservative and
+ * Optimistic are editable; Expected is the budget anchor (set in the dues
+ * group above) and shown read-only.
+ */
+function RangeStat({
+  label,
+  value,
+  onChange,
+  revenue,
+  budget,
+}: {
+  label: string;
+  value: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  revenue: number;
+  budget?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        budget ? "border-primary/40 bg-primary/5" : "border-border bg-background"
+      }`}
+    >
+      <p className="text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      {onChange ? (
+        <input
+          type="number" min={0}
+          value={value}
+          onChange={onChange}
+          aria-label={`${label} pledge count`}
+          className="mt-1.5 w-full rounded-lg border border-input bg-background px-2 py-1.5 text-center text-lg font-semibold text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
+        />
+      ) : (
+        <p className="mt-1.5 py-1.5 text-center text-lg font-semibold text-foreground">
+          {value || "0"}
+        </p>
+      )}
+      <p className="mt-1 whitespace-nowrap text-center text-xs text-muted-foreground">
+        → {fmtUSD(revenue)}
+      </p>
+      {budget && (
+        <p className="mt-0.5 text-center text-[10px] font-semibold uppercase tracking-wide text-primary">
+          Your budget
+        </p>
+      )}
     </div>
   );
 }
