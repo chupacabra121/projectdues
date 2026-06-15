@@ -9,6 +9,7 @@ import {
   setActivePeriod,
 } from "@/app/actions/periods";
 import { inputCls, labelCls } from "@/components/AuthShell";
+import DatePicker from "@/components/DatePicker";
 
 export function PeriodActions({
   id,
@@ -167,11 +168,11 @@ export function CreatePeriodForm({
         </div>
         <div>
           <label className={labelCls}>Starts</label>
-          <input name="start" type="date" defaultValue={defaultStart} required className={inputCls} />
+          <DatePicker name="start" defaultValue={defaultStart} />
         </div>
         <div>
           <label className={labelCls}>Ends</label>
-          <input name="end" type="date" defaultValue={defaultEnd} required className={inputCls} />
+          <DatePicker name="end" defaultValue={defaultEnd} />
         </div>
       </div>
 
