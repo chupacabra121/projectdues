@@ -106,7 +106,7 @@ export default function Header({
               }
               className="flex flex-shrink-0 items-center gap-2.5 rounded-full py-1 pl-1 pr-3.5 transition-colors hover:bg-muted/60"
             >
-              <ViewTransition name={`agent-${agent.slug}`} share="morph">
+              <ViewTransition name={`agent-${agent.slug}`} share="morph" default="none">
                 <span className="relative block h-9 w-9 overflow-hidden rounded-full border border-border">
                   <Image
                     src={agent.image}

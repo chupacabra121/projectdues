@@ -68,6 +68,7 @@ export async function createPeriod(formData: FormData): Promise<void> {
   const carryRoster = formData.get("carry_roster") === "on";
   const promotePledges = formData.get("promote_pledges") === "on";
   const carryObligations = formData.get("carry_obligations") === "on";
+  const carryActuals = formData.get("carry_actuals") === "on";
   const carrySettings = formData.get("carry_settings") === "on";
   const carryCaps = formData.get("carry_caps") === "on";
 
@@ -150,11 +151,11 @@ export async function createPeriod(formData: FormData): Promise<void> {
     if (from && carryObligations) {
       const items = db
         .prepare(
-          "SELECT name, amount, date, frequency, category, notes FROM budget_items WHERE user_id = ? AND period_id = ? AND type = 'fixed_expense'"
+          "SELECT name, amount, actual_amount, date, frequency, category, notes FROM budget_items WHERE user_id = ? AND period_id = ? AND type = 'fixed_expense'"
         )
         .all(user.id, from.id) as {
-        name: string; amount: number; date: string | null;
-        frequency: string; category: string; notes: string;
+        name: string; amount: number; actual_amount: number | null;
+        date: string | null; frequency: string; category: string; notes: string;
       }[];
       const insert = db.prepare(
         `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, notes)
@@ -172,7 +173,12 @@ export async function createPeriod(formData: FormData): Promise<void> {
           const day = Math.min(Number(it.date.slice(8, 10)) || 1, lastDay);
           date = `${start.slice(0, 7)}-${String(day).padStart(2, "0")}`;
         }
-        insert.run(user.id, pid, it.name, it.amount, date, it.frequency, it.category, it.notes);
+        // "Start from actuals": plan the new bill at what it really cost last
+        // term (when recorded), so the budget learns instead of repeating the
+        // same optimistic estimate. The new period's own actual starts blank.
+        const planned =
+          carryActuals && it.actual_amount != null ? it.actual_amount : it.amount;
+        insert.run(user.id, pid, it.name, planned, date, it.frequency, it.category, it.notes);
       }
     }
 

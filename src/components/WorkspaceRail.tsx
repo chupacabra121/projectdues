@@ -24,7 +24,7 @@ export default function WorkspaceRail({
   return (
     <aside className="rail-enter sticky top-[7rem] hidden h-fit w-64 shrink-0 flex-col gap-4 self-start lg:flex">
       {/* Portrait — the morph target for the header chip */}
-      <ViewTransition name={`agent-${agent.slug}`} share="morph">
+      <ViewTransition name={`agent-${agent.slug}`} share="morph" default="none">
         <div className="relative aspect-[4/5] w-full overflow-hidden rounded-2xl border border-border/60">
           <Image
             src={agent.portrait ?? agent.image}

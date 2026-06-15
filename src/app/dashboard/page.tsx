@@ -32,8 +32,11 @@ export default async function DashboardPage() {
   const items = getBudgetItems(user.id, period.id);
   const members = getMembers(user.id, period.id);
   const caps = getCategoryCaps(user.id, period.id);
-  const forecast = buildForecast(settings, items, caps);
   const curve = buildCashCurve(settings, items);
+  // Feed the cash curve's low point into the verdict so a mid-semester dip
+  // (bills before dues) surfaces as a warning instead of a green "on track".
+  const trough = curve ? { balance: curve.min.balance, date: curve.min.date } : null;
+  const forecast = buildForecast(settings, items, caps, trough);
   const months = monthlyFlows(settings, items);
   const penny = getAgent("budgeting")!;
 
@@ -43,7 +46,10 @@ export default async function DashboardPage() {
     .sort((a, b) => (a.date! < b.date! ? -1 : 1));
   const duesOutstanding = forecast.outstandingDues > 0;
 
-  // Penny's single most useful suggestion right now.
+  // Penny's single most useful suggestion right now. The mid-semester cash
+  // crunch is checked before "dues outstanding" / "on track" — being solvent on
+  // the semester total while going negative in week 8 is the dangerous case.
+  const cashCrunch = curve != null && curve.min.balance < 0;
   const nextAction =
     forecast.remainingBalance < 0
       ? {
@@ -52,8 +58,15 @@ export default async function DashboardPage() {
           cta: "Review the budget",
           href: "/budget",
         }
-      : duesOutstanding
+      : cashCrunch
         ? {
+            title: "Cash gets tight mid-semester",
+            body: `You're covered for the full semester, but around ${fmtDate(curve!.min.date)} your projected balance dips ${fmtUSD(-curve!.min.balance)} below zero — bills hit before dues finish arriving. Make sure cash is in hand by then.`,
+            cta: "See the cash timeline",
+            href: "/budget",
+          }
+        : duesOutstanding
+          ? {
             title: "Dues are still outstanding",
             body: `${fmtUSD(forecast.outstandingDues)} in dues is still projected to come in. Open the roster to reach members for a reminder.`,
             cta: "Open member roster",

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { setActualAmount, setBillPaid } from "@/app/actions/budget";
 import { BudgetItemRow, MemberRow, PeriodRow } from "@/lib/db";
-import { buildForecast, fmtUSD, fmtDate, occurrences } from "@/lib/forecast";
+import { buildForecast, fmtUSD, fmtDate, occurrences, effectiveAmount } from "@/lib/forecast";
 import { memberDuesWithTags, memberTier, isBillableMember } from "@/lib/memberDues";
 
 export default function Actuals({
@@ -38,7 +38,9 @@ export default function Actuals({
   // Bills due vs paid — the fixed obligations (national fees, insurance, …).
   // Unpaid sort to the top, soonest/overdue first; paid drop to the bottom.
   const bills = items.filter((i) => i.type === "fixed_expense");
-  const billCost = (i: BudgetItemRow) => i.amount * occurrences(i, period);
+  // Effective = the recorded actual once known, else the plan — so a national
+  // invoice that comes in high updates Total Due / Outstanding immediately.
+  const billCost = (i: BudgetItemRow) => effectiveAmount(i) * occurrences(i, period);
   const billsTotal = bills.reduce((s, i) => s + billCost(i), 0);
   const billsPaid = bills
     .filter((i) => i.paid === 1)
@@ -558,16 +560,33 @@ function BillRow({
   todayIso: string;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [actual, setActual] = useState(
+    item.actual_amount != null ? String(item.actual_amount) : ""
+  );
   const paid = item.paid === 1;
   const n = occurrences(item, period);
-  const amount = item.amount * n;
   const status = billStatus(item.date, paid, todayIso);
+  const hasActual = actual.trim() !== "";
+  const actualPer = parseFloat(actual);
+  const delta =
+    hasActual && !isNaN(actualPer) && actualPer >= 0
+      ? (actualPer - item.amount) * n
+      : 0;
 
   function toggle() {
     const fd = new FormData();
     fd.set("id", String(item.id));
     fd.set("paid", paid ? "0" : "1");
     startTransition(() => setBillPaid(fd));
+  }
+  function saveActual() {
+    const normalized = hasActual && !isNaN(actualPer) ? String(actualPer) : "";
+    const original = item.actual_amount != null ? String(item.actual_amount) : "";
+    if (normalized === original) return;
+    const fd = new FormData();
+    fd.set("id", String(item.id));
+    fd.set("actual", normalized);
+    startTransition(() => setActualAmount(fd));
   }
 
   return (
@@ -609,9 +628,39 @@ function BillRow({
       >
         {status.label}
       </span>
-      <p className="font-money text-right text-sm font-medium text-foreground">
-        {fmtUSD(amount)}
-      </p>
+      <div>
+        <div className="relative">
+          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            $
+          </span>
+          <input
+            type="number"
+            min={0}
+            step="0.01"
+            value={actual}
+            placeholder={String(item.amount)}
+            disabled={isPending}
+            onChange={(e) => setActual(e.target.value)}
+            onBlur={saveActual}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            }}
+            aria-label={`Actual amount for ${item.name}`}
+            title="What it actually billed — leave blank to use the plan"
+            className="font-money w-full rounded-lg border border-input bg-background py-1.5 pl-5 pr-2 text-right text-sm text-foreground placeholder:text-muted-foreground/50 focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40 disabled:opacity-50"
+          />
+        </div>
+        {delta !== 0 && (
+          <p
+            className={`mt-0.5 text-right text-[11px] font-medium ${
+              delta > 0 ? "text-money-down" : "text-money-up"
+            }`}
+          >
+            {delta > 0 ? "+" : "−"}
+            {fmtUSD(Math.abs(delta))} vs plan
+          </p>
+        )}
+      </div>
     </div>
   );
 }

@@ -36,8 +36,7 @@ export const AGENTS: AgentProfile[] = [
     name: "Penny",
     role: "Budgeting",
     status: "active",
-    image: "/agents/penny.jpg",
-    portrait: "/agents/penny-spotlight.jpg",
+    image: "/agents/penny.png",
     tagline: "Can we afford it?",
     description:
       "Penny watches money in and money out, keeps the semester forecast live, and answers the only question that matters: can we afford what we're planning?",
@@ -56,8 +55,7 @@ export const AGENTS: AgentProfile[] = [
     name: "Dunn",
     role: "Dues Collection",
     status: "active",
-    image: "/agents/dunn.jpg",
-    portrait: "/agents/dunn-spotlight.jpg",
+    image: "/agents/dunn.png",
     tagline: "Politely relentless.",
     description:
       "Dunn sends dues reminders by email and text, escalates gently when payments slip, and reports what's been collected — built on the member roster Penny already keeps.",
@@ -75,7 +73,7 @@ export const AGENTS: AgentProfile[] = [
     name: "Russ",
     role: "Recruitment",
     status: "soon",
-    image: "/agents/russ.jpg",
+    image: "/agents/russ.png",
     tagline: "Every bid counts.",
     description:
       "Russ will track the pledge pipeline against your recruitment scenarios and flag when rush spending isn't translating into signed bids.",
@@ -93,7 +91,7 @@ export const AGENTS: AgentProfile[] = [
     name: "Evie",
     role: "Events",
     status: "soon",
-    image: "/agents/evie.jpg",
+    image: "/agents/evie.png",
     tagline: "Formal, handled.",
     description:
       "Evie will keep every event's deposits, deadlines, and per-person costs in view so formal season doesn't surprise the budget.",
