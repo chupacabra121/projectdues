@@ -13,11 +13,11 @@ export default function LoginPage() {
       <form action={action} className="space-y-4">
         <div>
           <label className={labelCls} htmlFor="email">Email</label>
-          <input id="email" name="email" type="email" required className={inputCls} placeholder="treasurer@chapter.org" />
+          <input id="email" name="email" type="email" required className={inputCls} />
         </div>
         <div>
           <label className={labelCls} htmlFor="password">Password</label>
-          <input id="password" name="password" type="password" required className={inputCls} placeholder="••••••••" />
+          <input id="password" name="password" type="password" required className={inputCls} />
         </div>
         {state.error && (
           <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-3 py-2">{state.error}</p>
