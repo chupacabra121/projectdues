@@ -168,14 +168,17 @@ export default function Workbench({
   const billedMembers = live.active_members + live.pledges_expected;
   const collectedPct = Math.round(live.collection_rate * 100);
 
-  // ── The waterfall: money in − obligations = to work with − events = left ──
+  // ── The waterfall: in + income − bills = to work with − reserve = safe to
+  //    spend − events = left (projected end balance). The reserve is carved out
+  //    of what's spendable, so planning events can't quietly eat your cushion. ──
   const moneyIn = forecast.totalIncome;
   const inBank = live.starting_balance;
   const obligationsTotal = forecast.fixedObligations + forecast.variableObligations;
   const toWorkWith = inBank + moneyIn - obligationsTotal;
-  const eventsTotal = forecast.plannedEvents;
-  const left = forecast.remainingBalance; // toWorkWith − events
   const reserve = live.reserve_target;
+  const safeToSpend = toWorkWith - reserve; // the real budget for events
+  const eventsTotal = forecast.plannedEvents;
+  const left = forecast.remainingBalance; // toWorkWith − events = projected end balance
 
   return (
     <>
@@ -192,6 +195,8 @@ export default function Workbench({
         moneyIn={moneyIn}
         obligations={obligationsTotal}
         toWorkWith={toWorkWith}
+        reserve={reserve}
+        safeToSpend={safeToSpend}
         events={eventsTotal}
         left={left}
       />
@@ -358,32 +363,34 @@ export default function Workbench({
         </div>
       </Step>
 
-      {/* ── THE MILESTONE · money to work with ────────────────────────── */}
+      {/* ── THE MILESTONE · safe to spend (work-with, minus the reserve) ─── */}
       <div
-        data-deficit={toWorkWith < 0}
+        data-deficit={safeToSpend < 0}
         className="glass-hero transition-theme my-6 flex items-center justify-between gap-4 rounded-2xl p-6"
       >
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-            Money to work with
+            {reserve > 0 ? "Safe to spend" : "Money to work with"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
-            What&apos;s left for events after the bank, your income, and the must-pay bills.
+            {reserve > 0
+              ? `${fmtUSD(toWorkWith)} to work with, keeping ${fmtUSD(reserve)} in reserve.`
+              : "What's left for events after the bank, your income, and the must-pay bills."}
           </p>
         </div>
         <p
           className={`font-money-display glow breathe transition-theme shrink-0 text-5xl font-semibold sm:text-6xl ${toneText(
-            signTone(toWorkWith)
+            signTone(safeToSpend)
           )}`}
         >
-          {fmtUSD(toWorkWith)}
+          {fmtUSD(safeToSpend)}
         </p>
       </div>
 
       {/* ── STEP 3 · PLAN EVENTS ──────────────────────────────────────── */}
       <Step n={3} title="Plan Events" subtitle="Spend the working budget — stay under your caps"
         amount={`−${fmtUSD(eventsTotal)}`} tone="neutral">
-        <EventsMeter planned={eventsTotal} budget={toWorkWith} />
+        <EventsMeter planned={eventsTotal} budget={safeToSpend} />
         {events.length > 0 && (
           <div className="mb-3 space-y-2">
             {events.map((item) => (
@@ -449,6 +456,8 @@ function Ribbon({
   moneyIn,
   obligations,
   toWorkWith,
+  reserve,
+  safeToSpend,
   events,
   left,
 }: {
@@ -456,6 +465,8 @@ function Ribbon({
   moneyIn: number;
   obligations: number;
   toWorkWith: number;
+  reserve: number;
+  safeToSpend: number;
   events: number;
   left: number;
 }) {
@@ -467,8 +478,19 @@ function Ribbon({
         <RibbonStat label="Money in" value={moneyIn} />
         <Op>−</Op>
         <RibbonStat label="Obligations" value={obligations} />
-        <Op>=</Op>
-        <RibbonStat label="To work with" value={toWorkWith} tone={signTone(toWorkWith)} strong />
+        {reserve > 0 ? (
+          <>
+            <Op>−</Op>
+            <RibbonStat label="Reserve" value={reserve} />
+            <Op>=</Op>
+            <RibbonStat label="Safe to spend" value={safeToSpend} tone={signTone(safeToSpend)} strong />
+          </>
+        ) : (
+          <>
+            <Op>=</Op>
+            <RibbonStat label="To work with" value={toWorkWith} tone={signTone(toWorkWith)} strong />
+          </>
+        )}
         <Op>−</Op>
         <RibbonStat label="Events" value={events} />
         <Op>=</Op>
