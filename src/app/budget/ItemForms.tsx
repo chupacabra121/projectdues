@@ -26,6 +26,11 @@ import { inputCls, labelCls } from "@/components/AuthShell";
 import DatePicker from "@/components/DatePicker";
 import { useClickOutsideSave } from "@/lib/useClickOutsideSave";
 
+const num = (s: string) => {
+  const n = parseFloat(s);
+  return isNaN(n) || n < 0 ? 0 : n;
+};
+
 export type ItemType =
   | "fixed_expense"
   | "planned_event"
@@ -66,6 +71,24 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
   const meta = TYPE_META[type];
   const isEvent = type === "planned_event";
   const isVariable = type === "variable_expense";
+
+  // Amount and frequency are controlled so the deposit/balance split can show a
+  // live balance and only offer itself on one-time outflows.
+  const [amount, setAmount] = useState(
+    item?.amount != null ? String(item.amount) : ""
+  );
+  const [frequency, setFrequency] = useState<string>(item?.frequency ?? "one_time");
+  const existingSplit =
+    item?.schedule && item.schedule.length >= 2 ? item.schedule : null;
+  const [splitOn, setSplitOn] = useState(!!existingSplit);
+  const [deposit, setDeposit] = useState(
+    existingSplit ? String(existingSplit[0].amount) : ""
+  );
+  const canSplit = isEvent || (type === "fixed_expense" && frequency !== "monthly");
+  const showSplit = canSplit && splitOn;
+  const total = num(amount);
+  const balanceNum = Math.max(0, total - Math.min(total, num(deposit)));
+
   return (
     <>
       <div>
@@ -79,7 +102,7 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
           autoFocus
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid gap-3 ${showSplit ? "grid-cols-1" : "grid-cols-2"}`}>
         <div>
           <label className={labelCls}>
             {isEvent ? "Expected Cost" : isVariable ? "Cost per person" : "Amount"}
@@ -88,32 +111,52 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
             <input
               name="amount" type="number" min={0} step="0.01" required
-              defaultValue={item?.amount}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
               className={`${inputCls} pl-7`} placeholder={meta.amountPlaceholder}
             />
           </div>
         </div>
-        {isVariable ? (
-          <div>
-            <label className={labelCls}>Per</label>
-            <select name="cost_basis" className={inputCls} defaultValue={item?.cost_basis ?? "brother"}>
-              <option value="brother">Brother</option>
-              <option value="pledge">Pledge</option>
-              <option value="member">Everyone</option>
-            </select>
-          </div>
-        ) : (
-          <div>
-            <label className={labelCls}>Date</label>
-            <DatePicker name="date" defaultValue={item?.date ?? ""} />
-          </div>
-        )}
+        {!showSplit &&
+          (isVariable ? (
+            <div>
+              <label className={labelCls}>Per</label>
+              <select name="cost_basis" className={inputCls} defaultValue={item?.cost_basis ?? "brother"}>
+                <option value="brother">Brother</option>
+                <option value="pledge">Pledge</option>
+                <option value="member">Everyone</option>
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className={labelCls}>Date</label>
+              <DatePicker name="date" defaultValue={item?.date ?? ""} />
+            </div>
+          ))}
       </div>
+
+      {canSplit && (
+        <PaymentSplit
+          on={splitOn}
+          setOn={setSplitOn}
+          deposit={deposit}
+          setDeposit={setDeposit}
+          balance={balanceNum}
+          existing={existingSplit}
+          fallbackDate={item?.date ?? ""}
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         {!isEvent && !isVariable && (
           <div>
             <label className={labelCls}>Frequency</label>
-            <select name="frequency" className={inputCls} defaultValue={item?.frequency ?? "one_time"}>
+            <select
+              name="frequency"
+              className={inputCls}
+              value={frequency}
+              onChange={(e) => setFrequency(e.target.value)}
+            >
               <option value="one_time">One-time</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
@@ -161,6 +204,86 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
         />
       </div>
     </>
+  );
+}
+
+/**
+ * Deposit + balance split for a lumpy outflow (events / one-time fixed bills).
+ * The balance is the total minus the deposit; each part submits its own date so
+ * the server reconstructs a two-payment schedule. Collapsed by default.
+ */
+function PaymentSplit({
+  on,
+  setOn,
+  deposit,
+  setDeposit,
+  balance,
+  existing,
+  fallbackDate,
+}: {
+  on: boolean;
+  setOn: (v: boolean) => void;
+  deposit: string;
+  setDeposit: (v: string) => void;
+  balance: number;
+  existing: { amount: number; date: string }[] | null;
+  fallbackDate: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-muted/30 p-3">
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-foreground">
+        <input
+          type="checkbox"
+          checked={on}
+          onChange={(e) => setOn(e.target.checked)}
+          className="h-4 w-4 rounded border-input accent-primary"
+        />
+        Split into payments
+        <span className="text-xs font-normal text-muted-foreground">deposit + balance</span>
+      </label>
+      {on && (
+        <div className="mt-3 space-y-3">
+          <input type="hidden" name="splitOn" value="1" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Deposit</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                <input
+                  name="depositAmount" type="number" min={0} step="0.01"
+                  value={deposit}
+                  onChange={(e) => setDeposit(e.target.value)}
+                  className={`${inputCls} pl-7`} placeholder="2000"
+                />
+              </div>
+            </div>
+            <div>
+              <label className={labelCls}>Deposit date</label>
+              <DatePicker
+                name="depositDate"
+                defaultValue={existing ? existing[0].date : fallbackDate}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Balance</label>
+              <div className={`${inputCls} flex items-center font-money`}>{fmtUSD(balance)}</div>
+            </div>
+            <div>
+              <label className={labelCls}>Balance due</label>
+              <DatePicker
+                name="balanceDate"
+                defaultValue={existing ? existing[existing.length - 1].date : ""}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Each part hits the cash timeline on its own date.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -292,7 +415,11 @@ export function ItemRow({
             }`
           ) : (
             <>
-              {fmtDate(item.date)}
+              {item.schedule && item.schedule.length >= 2
+                ? `${fmtUSD(item.schedule[0].amount)} ${fmtDate(item.schedule[0].date)} → ${fmtUSD(
+                    item.schedule[item.schedule.length - 1].amount
+                  )} ${fmtDate(item.schedule[item.schedule.length - 1].date)}`
+                : fmtDate(item.date)}
               {item.frequency === "monthly" && ` · monthly ×${n}`}
               {item.frequency === "yearly" && " · yearly"}
               {item.attendance ? ` · ~${item.attendance} attending` : ""}
