@@ -14,6 +14,16 @@ export default function SignupPage() {
       subtitle="Set up budgeting and forecasting for your chapter"
     >
       <form action={action} className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls} htmlFor="first_name">First name</label>
+            <input id="first_name" name="first_name" type="text" required autoComplete="given-name" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls} htmlFor="last_name">Last name</label>
+            <input id="last_name" name="last_name" type="text" autoComplete="family-name" className={inputCls} />
+          </div>
+        </div>
         <div>
           <label className={labelCls} htmlFor="chapter_name">Chapter / Organization name</label>
           <input id="chapter_name" name="chapter_name" type="text" required className={inputCls} />

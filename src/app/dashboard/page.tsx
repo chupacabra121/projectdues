@@ -87,7 +87,7 @@ export default async function DashboardPage() {
           <div>
             <h1 className="font-display text-3xl text-foreground sm:text-4xl">
               {greeting()},{" "}
-              <span className="text-primary">{user.chapter_name}</span>
+              <span className="text-primary">{user.first_name?.trim() || user.chapter_name}</span>
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {period.name} · {fmtDate(settings.semester_start)} –{" "}
