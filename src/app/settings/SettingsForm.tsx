@@ -1,17 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  Bell,
-  Building2,
-  Check,
-  Mail,
-  ShieldCheck,
-  SlidersHorizontal,
-  Trash2,
-  TriangleAlert,
-  User,
-} from "lucide-react";
+import { Bell, Building2, Check, Mail, User } from "lucide-react";
 import { updateAccount } from "@/app/actions/account";
 import { UserPreferences } from "@/lib/db";
 import { inputCls, labelCls } from "@/components/AuthShell";
@@ -170,122 +160,9 @@ export default function SettingsForm({
           </div>
         </div>
       </Section>
-
-      {/* Display & preferences */}
-      <Section
-        icon={SlidersHorizontal}
-        title="Display & preferences"
-        desc="How numbers, dates, and the app behave for you."
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <SelectField
-            label="Currency"
-            value={prefs.currency}
-            onChange={(v) => setPref("currency", v)}
-            options={[
-              ["USD", "USD — US Dollar"],
-              ["CAD", "CAD — Canadian Dollar"],
-              ["GBP", "GBP — British Pound"],
-              ["EUR", "EUR — Euro"],
-              ["AUD", "AUD — Australian Dollar"],
-            ]}
-          />
-          <SelectField
-            label="Date format"
-            value={prefs.dateFormat}
-            onChange={(v) => setPref("dateFormat", v)}
-            options={[
-              ["MMM D, YYYY", "Mar 12, 2026"],
-              ["MM/DD/YYYY", "03/12/2026"],
-              ["DD/MM/YYYY", "12/03/2026"],
-              ["YYYY-MM-DD", "2026-03-12"],
-            ]}
-          />
-          <SelectField
-            label="Week starts on"
-            value={prefs.weekStart}
-            onChange={(v) => setPref("weekStart", v)}
-            options={[
-              ["sunday", "Sunday"],
-              ["monday", "Monday"],
-            ]}
-          />
-          <SelectField
-            label="Fiscal year starts"
-            value={prefs.fiscalYearStart}
-            onChange={(v) => setPref("fiscalYearStart", v)}
-            options={MONTHS.map((m) => [m, m] as [string, string])}
-          />
-          <div className="sm:col-span-2">
-            <SelectField
-              label="Open the app to"
-              value={prefs.defaultLanding}
-              onChange={(v) => setPref("defaultLanding", v)}
-              options={[
-                ["/dashboard", "Dashboard"],
-                ["/budget", "Budget"],
-                ["/members", "Members"],
-                ["/dues", "Dues"],
-                ["/collections", "Collections"],
-              ]}
-            />
-          </div>
-        </div>
-      </Section>
-
-      {/* Security */}
-      <Section icon={ShieldCheck} title="Security" desc="Keep your chapter's account protected.">
-        <div className="divide-y divide-border/60">
-          <ToggleRow
-            label="Two-factor authentication"
-            desc="Require a one-time code at sign-in."
-            checked={prefs.twoFactor}
-            onChange={(v) => setPref("twoFactor", v)}
-          />
-          <div className="flex items-center justify-between gap-4 py-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">Password</p>
-              <p className="text-xs text-muted-foreground">Last changed when you created the account.</p>
-            </div>
-            <SoonButton label="Change password" />
-          </div>
-          <div className="flex items-center justify-between gap-4 py-4">
-            <div>
-              <p className="text-sm font-medium text-foreground">Active sessions</p>
-              <p className="text-xs text-muted-foreground">This device · active now</p>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-accent-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_6px_var(--primary)]" />
-              1 active
-            </span>
-          </div>
-        </div>
-      </Section>
-
-      {/* Danger zone */}
-      <section className="rounded-2xl border border-destructive/30 bg-destructive/5 p-5 sm:p-6">
-        <div className="mb-4 flex items-center gap-2.5">
-          <TriangleAlert className="h-4 w-4 text-destructive" />
-          <h2 className="font-semibold text-foreground">Danger zone</h2>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-foreground">Delete this account</p>
-            <p className="text-xs text-muted-foreground">
-              Permanently removes your chapter, roster, and every budget. This can&apos;t be undone.
-            </p>
-          </div>
-          <SoonButton label="Delete account" destructive icon={Trash2} />
-        </div>
-      </section>
     </div>
   );
 }
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 /* ─── pieces ─────────────────────────────────────────────────────────── */
 
@@ -321,14 +198,12 @@ function Field({
   value,
   onChange,
   type = "text",
-  placeholder,
   autoComplete,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
-  placeholder?: string;
   autoComplete?: string;
 }) {
   return (
@@ -338,7 +213,6 @@ function Field({
         type={type}
         className={inputCls}
         value={value}
-        placeholder={placeholder}
         autoComplete={autoComplete}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -380,11 +254,7 @@ function SelectField({
   return (
     <div>
       <label className={labelCls}>{label}</label>
-      <select
-        className={inputCls}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
+      <select className={inputCls} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map(([v, l]) => (
           <option key={v} value={v}>
             {l}
@@ -456,37 +326,6 @@ function SaveButton({
       className="inline-flex h-10 items-center gap-2 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
     >
       {pending ? "Saving…" : "Save changes"}
-    </button>
-  );
-}
-
-/** A placeholder action that isn't wired up yet — mirrors the app's "Coming
- *  soon" convention (used by the onboarding import options). */
-function SoonButton({
-  label,
-  destructive,
-  icon: Icon,
-}: {
-  label: string;
-  destructive?: boolean;
-  icon?: typeof User;
-}) {
-  return (
-    <button
-      type="button"
-      disabled
-      title="Coming soon"
-      className={`inline-flex shrink-0 cursor-not-allowed items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium opacity-60 ${
-        destructive
-          ? "border-destructive/40 text-destructive"
-          : "border-border text-foreground"
-      }`}
-    >
-      {Icon && <Icon className="h-4 w-4" />}
-      {label}
-      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
-        Soon
-      </span>
     </button>
   );
 }

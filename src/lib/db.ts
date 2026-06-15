@@ -593,7 +593,7 @@ export interface UserRow {
   preferences: string | null;
 }
 
-/** Account-level preferences shown in the Settings page. */
+/** Account-level preferences shown in the Settings page (Notifications). */
 export interface UserPreferences {
   emailNotifications: boolean;
   smsNotifications: boolean;
@@ -601,12 +601,6 @@ export interface UserPreferences {
   weeklySummary: boolean;
   paymentAlerts: boolean;
   notifyFrequency: string; // realtime | daily | weekly
-  currency: string; // USD | CAD | ...
-  dateFormat: string; // "MMM D, YYYY" | "DD/MM/YYYY" | ...
-  weekStart: string; // sunday | monday
-  fiscalYearStart: string; // month name
-  defaultLanding: string; // route the app opens to
-  twoFactor: boolean;
 }
 
 export const DEFAULT_USER_PREFERENCES: UserPreferences = {
@@ -616,12 +610,6 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   weeklySummary: true,
   paymentAlerts: true,
   notifyFrequency: "daily",
-  currency: "USD",
-  dateFormat: "MMM D, YYYY",
-  weekStart: "sunday",
-  fiscalYearStart: "August",
-  defaultLanding: "/dashboard",
-  twoFactor: false,
 };
 
 /** Stored preferences merged over the defaults (so new keys always resolve). */
