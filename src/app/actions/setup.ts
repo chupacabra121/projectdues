@@ -125,6 +125,14 @@ export interface BudgetSettingsPayload {
   reserveTarget: number;
   semesterStart: string; // YYYY-MM-DD
   semesterEnd: string;
+  /** When dues arrive: sixweek | upfront | monthly | thirds (drives the cash curve). */
+  duesSchedule?: string;
+}
+
+const DUES_SCHEDULES = ["sixweek", "upfront", "monthly", "thirds"];
+function parseDuesSchedule(v: unknown): string {
+  const s = String(v ?? "");
+  return DUES_SCHEDULES.includes(s) ? s : "sixweek";
 }
 
 function parseIsoDate(v: unknown, fallback: string): string {
@@ -151,7 +159,8 @@ export async function updateBudgetSettings(
         pledge_dues = ?, collection_rate = ?,
         pledges_conservative = ?, pledges_expected = ?, pledges_optimistic = ?,
         starting_balance = ?, reserve_target = ?,
-        semester_start = ?, semester_end = ?
+        semester_start = ?, semester_end = ?,
+        dues_schedule = ?
       WHERE id = ? AND user_id = ?`
     )
     .run(
@@ -165,6 +174,7 @@ export async function updateBudgetSettings(
       clampMoney(payload.reserveTarget),
       parseIsoDate(payload.semesterStart, sem.start),
       parseIsoDate(payload.semesterEnd, sem.end),
+      parseDuesSchedule(payload.duesSchedule),
       period.id,
       user.id
     );

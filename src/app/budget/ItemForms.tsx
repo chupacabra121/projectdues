@@ -23,6 +23,8 @@ import {
   variableHeadcount,
 } from "@/lib/forecast";
 import { inputCls, labelCls } from "@/components/AuthShell";
+import DatePicker from "@/components/DatePicker";
+import { useClickOutsideSave } from "@/lib/useClickOutsideSave";
 
 export type ItemType =
   | "fixed_expense"
@@ -103,7 +105,7 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
         ) : (
           <div>
             <label className={labelCls}>Date</label>
-            <input name="date" type="date" defaultValue={item?.date ?? ""} className={inputCls} />
+            <DatePicker name="date" defaultValue={item?.date ?? ""} />
           </div>
         )}
       </div>
@@ -137,6 +139,16 @@ function ItemFields({ type, item }: { type: ItemType; item?: BudgetItemRow }) {
               name="attendance" type="number" min={0}
               defaultValue={item?.attendance ?? ""}
               className={inputCls} placeholder="120"
+            />
+          </div>
+        )}
+        {isVariable && (
+          <div>
+            <label className={labelCls}>Date (optional)</label>
+            <DatePicker
+              name="date"
+              defaultValue={item?.date ?? ""}
+              placeholder="When it's billed"
             />
           </div>
         )}
@@ -211,11 +223,15 @@ export function ItemRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
   const n = occurrences(item, settings);
+  // Clicking outside the open editor saves it (same as the Save button).
+  useClickOutsideSave(formRef, editing);
 
   if (editing) {
     return (
       <form
+        ref={formRef}
         action={(fd) =>
           startTransition(async () => {
             await updateBudgetItem(fd);
@@ -271,7 +287,9 @@ export function ItemRow({
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
           {isVariable ? (
-            `${fmtUSD(item.amount)} per ${costBasisLabel(item.cost_basis)} · ×${head}`
+            `${fmtUSD(item.amount)} per ${costBasisLabel(item.cost_basis)} · ×${head}${
+              item.date ? ` · ${fmtDate(item.date)}` : ""
+            }`
           ) : (
             <>
               {fmtDate(item.date)}

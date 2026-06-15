@@ -231,10 +231,17 @@ export function totalFor(
     .reduce((sum, i) => sum + itemSemesterCost(i, s), 0);
 }
 
+/** The semester's lowest projected cash point (from the cash curve), if known. */
+export interface CashTrough {
+  balance: number;
+  date: string;
+}
+
 export function buildForecast(
   s: ForecastSettings,
   items: ForecastItem[],
-  caps: Record<string, number> = {}
+  caps: Record<string, number> = {},
+  cashTrough: CashTrough | null = null
 ): Forecast {
   const projectedRevenue = revenueFor(s, s.pledges_expected);
   const otherIncome = totalFor(items, "other_income", s);
@@ -287,14 +294,20 @@ export function buildForecast(
     remainingBalance,
     totalCommitted,
     scenarios,
-    insights: buildInsights(s, items, caps, {
-      projectedRevenue,
-      otherIncome,
-      fixedObligations,
-      plannedEvents,
-      remainingBalance,
-      variance,
-    }),
+    insights: buildInsights(
+      s,
+      items,
+      caps,
+      {
+        projectedRevenue,
+        otherIncome,
+        fixedObligations,
+        plannedEvents,
+        remainingBalance,
+        variance,
+      },
+      cashTrough
+    ),
   };
 }
 
@@ -309,10 +322,12 @@ function buildInsights(
     plannedEvents: number;
     remainingBalance: number;
     variance: number;
-  }
+  },
+  cashTrough: CashTrough | null = null
 ): Insight[] {
   const insights: Insight[] = [];
   const deficit = -f.remainingBalance;
+  const troughNegative = cashTrough != null && cashTrough.balance < 0;
 
   if (deficit > 0) {
     insights.push({
@@ -327,10 +342,30 @@ function buildInsights(
         text: `Recruiting ${needed} additional pledge${needed === 1 ? "" : "s"} would eliminate the projected deficit.`,
       });
     }
+  } else if (troughNegative) {
+    // Covered for the full semester, but cash dips below zero mid-way — the
+    // bills land before the dues finish arriving. The scary, easy-to-miss case.
+    insights.push({
+      tone: "bad",
+      text: `Tight timing: around ${fmtDate(cashTrough!.date)} your balance dips ${fmtUSD(-cashTrough!.balance)} below zero — bills land before dues finish coming in. You're covered for the full semester, but you'll need cash in hand by then.`,
+    });
   } else {
     insights.push({
       tone: "good",
       text: "You can afford all planned events and obligations.",
+    });
+  }
+
+  // Even when the trough stays positive, flag it dipping under the reserve.
+  if (
+    cashTrough != null &&
+    cashTrough.balance >= 0 &&
+    s.reserve_target > 0 &&
+    cashTrough.balance < s.reserve_target
+  ) {
+    insights.push({
+      tone: "warn",
+      text: `Your lowest point this semester is ${fmtUSD(cashTrough.balance)} around ${fmtDate(cashTrough.date)} — below your ${fmtUSD(s.reserve_target)} cushion.`,
     });
   }
 

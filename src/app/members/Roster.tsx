@@ -7,6 +7,7 @@ import { addMember, updateMember, setMemberStatus } from "@/app/actions/members"
 import { MemberRow } from "@/lib/db";
 import { MemberStatus, MEMBER_STATUSES, isActiveMember } from "@/lib/memberStatus";
 import { CustomCategory } from "@/lib/memberDues";
+import { useClickOutsideSave } from "@/lib/useClickOutsideSave";
 import { inputCls } from "@/components/AuthShell";
 import { ImportMembersButton } from "./ImportMembers";
 import { CategoryManagerButton } from "./CategoryManager";
@@ -470,6 +471,9 @@ function MemberLine({
   const [editing, setEditing] = useState(false);
   const [tags, setTags] = useState<string[]>(member.tags);
   const [isPending, startTransition] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+  // Clicking outside the open editor saves it (same as the Save button).
+  useClickOutsideSave(formRef, editing);
 
   const openEdit = () => {
     setTags(member.tags);
@@ -482,6 +486,7 @@ function MemberLine({
   if (editing) {
     return (
       <form
+        ref={formRef}
         action={(fd) =>
           startTransition(async () => {
             await updateMember(fd);

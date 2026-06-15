@@ -24,6 +24,7 @@ interface MoneyInState {
   optimistic: string;
   startingBalance: string;
   reserveTarget: string;
+  duesSchedule: string;
 }
 
 const num = (s: string) => {
@@ -65,6 +66,7 @@ export default function Workbench({
     optimistic: String(settings.pledges_optimistic),
     startingBalance: String(settings.starting_balance),
     reserveTarget: String(settings.reserve_target),
+    duesSchedule: settings.dues_schedule || "sixweek",
   });
   const [saveState, setSaveState] = useState<"idle" | "dirty" | "saving" | "saved">("idle");
   const [, startTransition] = useTransition();
@@ -101,7 +103,7 @@ export default function Workbench({
       // not the Budget tab — read it straight through for the forecast math.
       semester_start: settings.semester_start,
       semester_end: settings.semester_end,
-      dues_schedule: settings.dues_schedule,
+      dues_schedule: s.duesSchedule,
       // Custom tiers are materialized from the roster and billed at their own
       // rate; read-only here (their rate is set in Manage categories).
       custom_tier_breakdowns: settings.custom_tier_breakdowns,
@@ -110,7 +112,6 @@ export default function Workbench({
     s,
     settings.current_pledges,
     settings.dues_collected,
-    settings.dues_schedule,
     settings.semester_start,
     settings.semester_end,
     settings.custom_tier_breakdowns,
@@ -143,6 +144,7 @@ export default function Workbench({
           reserveTarget: live.reserve_target,
           semesterStart: live.semester_start,
           semesterEnd: live.semester_end,
+          duesSchedule: live.dues_schedule,
         });
         setSaveState("saved");
       });
@@ -298,6 +300,25 @@ export default function Workbench({
               </>
             )}
           </p>
+        </div>
+
+        {/* When dues arrive — drives the cash-flow timeline on the dashboard */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border bg-muted/30 px-4 py-2.5">
+          <span className="text-sm font-medium text-foreground">When do dues come in?</span>
+          <select
+            value={s.duesSchedule}
+            onChange={(e) => setS((prev) => ({ ...prev, duesSchedule: e.target.value }))}
+            aria-label="When dues come in"
+            className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring/40"
+          >
+            <option value="sixweek">Over the first ~6 weeks</option>
+            <option value="upfront">All upfront</option>
+            <option value="monthly">Monthly installments</option>
+            <option value="thirds">In thirds (⅓ now, then two)</option>
+          </select>
+          <span className="text-xs text-muted-foreground">
+            shapes the cash-flow timeline
+          </span>
         </div>
 
         {/* Other income */}

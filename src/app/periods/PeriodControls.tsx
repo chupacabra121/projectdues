@@ -132,6 +132,12 @@ const CARRY_OPTIONS = [
     default: true,
   },
   {
+    name: "carry_actuals",
+    label: "Start from what they really cost",
+    hint: "Seed each carried bill with last semester's actual amount, not the original plan",
+    default: true,
+  },
+  {
     name: "carry_caps",
     label: "Category allocations",
     hint: "Spending caps per category",
