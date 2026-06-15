@@ -128,6 +128,11 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
   addColumnIfMissing(db, "budget_items", "paid", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "budget_items", "schedule", "TEXT");
+  addColumnIfMissing(db, "users", "first_name", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "last_name", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "phone", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "title", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "preferences", "TEXT");
   addColumnIfMissing(db, "members", "tags", "TEXT NOT NULL DEFAULT '[]'");
   addColumnIfMissing(db, "periods", "custom_categories", "TEXT");
   addColumnIfMissing(db, "periods", "custom_tier_breakdowns", "TEXT");
@@ -613,6 +618,56 @@ export interface UserRow {
   email: string;
   password_hash: string;
   chapter_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  /** The person's role on the chapter exec, e.g. "Treasurer". */
+  title: string;
+  /** JSON of account preferences (notifications, display, etc.); null = defaults. */
+  preferences: string | null;
+}
+
+/** Account-level preferences shown in the Settings page. */
+export interface UserPreferences {
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  duesReminders: boolean;
+  weeklySummary: boolean;
+  paymentAlerts: boolean;
+  notifyFrequency: string; // realtime | daily | weekly
+  currency: string; // USD | CAD | ...
+  dateFormat: string; // "MMM D, YYYY" | "DD/MM/YYYY" | ...
+  weekStart: string; // sunday | monday
+  fiscalYearStart: string; // month name
+  defaultLanding: string; // route the app opens to
+  twoFactor: boolean;
+}
+
+export const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  emailNotifications: true,
+  smsNotifications: false,
+  duesReminders: true,
+  weeklySummary: true,
+  paymentAlerts: true,
+  notifyFrequency: "daily",
+  currency: "USD",
+  dateFormat: "MMM D, YYYY",
+  weekStart: "sunday",
+  fiscalYearStart: "August",
+  defaultLanding: "/dashboard",
+  twoFactor: false,
+};
+
+/** Stored preferences merged over the defaults (so new keys always resolve). */
+export function parseUserPreferences(raw: unknown): UserPreferences {
+  if (typeof raw !== "string" || !raw) return { ...DEFAULT_USER_PREFERENCES };
+  try {
+    const p = JSON.parse(raw);
+    if (!p || typeof p !== "object") return { ...DEFAULT_USER_PREFERENCES };
+    return { ...DEFAULT_USER_PREFERENCES, ...(p as Partial<UserPreferences>) };
+  } catch {
+    return { ...DEFAULT_USER_PREFERENCES };
+  }
 }
 
 /** User-level settings; per-semester numbers live on PeriodRow now. */

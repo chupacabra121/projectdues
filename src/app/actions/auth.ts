@@ -16,7 +16,10 @@ export async function signup(
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const chapterName = String(formData.get("chapter_name") ?? "").trim();
+  const firstName = String(formData.get("first_name") ?? "").trim().slice(0, 60);
+  const lastName = String(formData.get("last_name") ?? "").trim().slice(0, 60);
 
+  if (!firstName) return { error: "Enter your first name." };
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
     return { error: "Enter a valid email address." };
   if (password.length < 8)
@@ -30,9 +33,9 @@ export async function signup(
   const hash = await bcrypt.hash(password, 10);
   const result = db
     .prepare(
-      "INSERT INTO users (email, password_hash, chapter_name) VALUES (?, ?, ?)"
+      "INSERT INTO users (email, password_hash, chapter_name, first_name, last_name) VALUES (?, ?, ?, ?, ?)"
     )
-    .run(email, hash, chapterName);
+    .run(email, hash, chapterName, firstName, lastName);
 
   await createSession(Number(result.lastInsertRowid));
   redirect("/onboarding");
