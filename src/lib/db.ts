@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
-import { ActiveDuesBreakdown, TierBreakdown } from "./forecast";
+import { ActiveDuesBreakdown, ScheduledPayment, TierBreakdown } from "./forecast";
 import { MemberStatus } from "./memberStatus";
 import { CollectionStage, ContactChannel } from "./collectionStages";
 import {
@@ -127,6 +127,7 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "budget_items", "actual_amount", "REAL");
   addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
   addColumnIfMissing(db, "budget_items", "paid", "INTEGER NOT NULL DEFAULT 0");
+  addColumnIfMissing(db, "budget_items", "schedule", "TEXT");
   addColumnIfMissing(db, "members", "tags", "TEXT NOT NULL DEFAULT '[]'");
   addColumnIfMissing(db, "periods", "custom_categories", "TEXT");
   addColumnIfMissing(db, "periods", "custom_tier_breakdowns", "TEXT");
@@ -181,6 +182,39 @@ export function parseDuesPlans(raw: unknown): DuesPlan[] {
     }));
   } catch {
     return DEFAULT_DUES_PLANS;
+  }
+}
+
+/**
+ * Parse a budget item's payment schedule (deposit + balance) JSON. Returns null
+ * — i.e. fall back to single-date behavior — unless every row has a valid date
+ * and positive amount AND the parts reconcile to the planned total. Once a real
+ * cost lands the stored total changes and the split is intentionally dropped,
+ * so the curve uses the actual on the single date instead.
+ */
+export function parseSchedule(
+  raw: unknown,
+  totalAmount: number
+): ScheduledPayment[] | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p) || p.length < 2) return null;
+    const rows = p
+      .slice(0, 6)
+      .map((r: { amount?: unknown; date?: unknown }) => ({
+        amount: Math.max(0, Number(r?.amount) || 0),
+        date:
+          typeof r?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(r.date)
+            ? r.date
+            : "",
+      }));
+    if (rows.some((r) => !r.date || r.amount <= 0)) return null;
+    const sum = rows.reduce((s, r) => s + r.amount, 0);
+    if (Math.abs(sum - totalAmount) > 0.01) return null;
+    return rows;
+  } catch {
+    return null;
   }
 }
 
@@ -636,6 +670,8 @@ export interface BudgetItemRow {
   notes: string;
   /** 1 once a fixed obligation has been paid (the Bills-Due tracker checkbox). */
   paid: number;
+  /** Deposit + balance split for a lumpy outflow; null = single payment on `date`. */
+  schedule: ScheduledPayment[] | null;
 }
 
 /** Default semester window based on today's date (fall: Aug–Dec, spring: Jan–May). */
@@ -844,9 +880,12 @@ export function getCategoryCaps(
 }
 
 export function getBudgetItems(userId: number, periodId: number): BudgetItemRow[] {
-  return getDb()
+  const rows = getDb()
     .prepare(
       "SELECT * FROM budget_items WHERE user_id = ? AND period_id = ? ORDER BY date IS NULL, date ASC, id ASC"
     )
-    .all(userId, periodId) as BudgetItemRow[];
+    .all(userId, periodId) as (Omit<BudgetItemRow, "schedule"> & {
+    schedule: unknown;
+  })[];
+  return rows.map((r) => ({ ...r, schedule: parseSchedule(r.schedule, r.amount) }));
 }

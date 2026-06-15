@@ -96,6 +96,13 @@ export function customTiersRevenue(s: ForecastSettings): number {
   );
 }
 
+/** One dated payment toward a lumpy outflow (e.g. an event deposit, then the
+ *  balance). The amounts sum to the item's planned amount. */
+export interface ScheduledPayment {
+  amount: number;
+  date: string; // YYYY-MM-DD
+}
+
 export interface ForecastItem {
   id?: number;
   type: "fixed_expense" | "planned_event" | "other_income" | "variable_expense";
@@ -108,6 +115,13 @@ export interface ForecastItem {
   category: string;
   /** variable_expense only: 'brother' | 'pledge' | 'member' — what `amount` is per. */
   cost_basis?: string | null;
+  /**
+   * planned_event / one-time fixed_expense: split the PLANNED amount into dated
+   * payments (deposit + balance) so a lumpy cost hits the cash curve on the
+   * right dates. Ignored once actual_amount is known (the parts no longer
+   * reconcile) — the curve falls back to a single hit on `date`.
+   */
+  schedule?: ScheduledPayment[] | null;
 }
 
 /** Per-person bases a variable cost can scale on. */

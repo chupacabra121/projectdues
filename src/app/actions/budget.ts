@@ -28,6 +28,31 @@ function parseDate(v: unknown): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
 }
 
+/**
+ * A deposit + balance split for events / one-time fixed expenses. Returns the
+ * two dated parts (deposit, then balance = total − deposit) only when the toggle
+ * is on, the type allows it, and both dates + positive amounts are present.
+ */
+function parseSplit(
+  fd: FormData,
+  type: ItemType,
+  frequency: string,
+  total: number
+): { amount: number; date: string }[] | null {
+  if (fd.get("splitOn") !== "1") return null;
+  if (type !== "planned_event" && type !== "fixed_expense") return null;
+  if (frequency === "monthly") return null;
+  const deposit = parseAmount(fd.get("depositAmount"));
+  const balance = Math.round((total - deposit) * 100) / 100;
+  const depositDate = parseDate(fd.get("depositDate"));
+  const balanceDate = parseDate(fd.get("balanceDate"));
+  if (!depositDate || !balanceDate || deposit <= 0 || balance <= 0) return null;
+  return [
+    { amount: deposit, date: depositDate },
+    { amount: balance, date: balanceDate },
+  ];
+}
+
 function autoCategorize(type: ItemType, name: string): string {
   if (type === "planned_event") return categorizeEvent(name);
   if (type === "other_income") return categorizeIncome(name);
@@ -44,6 +69,8 @@ interface ParsedItem {
   attendance: number | null;
   cost_basis: string | null;
   notes: string;
+  /** JSON deposit+balance schedule to store, or null for a single payment. */
+  schedule: string | null;
 }
 
 function parseItemForm(formData: FormData): ParsedItem | null {
@@ -74,20 +101,27 @@ function parseItemForm(formData: FormData): ParsedItem | null {
         : "brother"
       : null;
 
+  // Per-head and event costs are a single per-semester figure.
+  const finalFrequency =
+    type === "planned_event" || type === "variable_expense"
+      ? "one_time"
+      : frequency;
+  const amount = parseAmount(formData.get("amount"));
+  // When a payment is split, the item's `date` becomes the deposit date so it
+  // still sorts and shows in the commitments timeline.
+  const split = parseSplit(formData, type, finalFrequency, amount);
+
   return {
     type,
     name,
-    amount: parseAmount(formData.get("amount")),
-    date: parseDate(formData.get("date")),
-    // Per-head and event costs are a single per-semester figure.
-    frequency:
-      type === "planned_event" || type === "variable_expense"
-        ? "one_time"
-        : frequency,
+    amount,
+    date: split ? split[0].date : parseDate(formData.get("date")),
+    frequency: finalFrequency,
     category,
     attendance,
     cost_basis,
     notes: String(formData.get("notes") ?? "").trim(),
+    schedule: split ? JSON.stringify(split) : null,
   };
 }
 
@@ -101,8 +135,8 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
   // Actual page once a cost is known.
   getDb()
     .prepare(
-      `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, cost_basis, notes)
-       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO budget_items (user_id, period_id, type, name, amount, actual_amount, date, frequency, category, attendance, cost_basis, notes, schedule)
+       VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       user.id,
@@ -115,7 +149,8 @@ export async function addBudgetItem(formData: FormData): Promise<void> {
       item.category,
       item.attendance,
       item.cost_basis,
-      item.notes
+      item.notes,
+      item.schedule
     );
   revalidateAll();
 }
@@ -130,7 +165,7 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
   getDb()
     .prepare(
       `UPDATE budget_items SET
-        name = ?, amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, cost_basis = ?, notes = ?
+        name = ?, amount = ?, date = ?, frequency = ?, category = ?, attendance = ?, cost_basis = ?, notes = ?, schedule = ?
        WHERE id = ? AND user_id = ? AND type = ?`
     )
     .run(
@@ -142,6 +177,7 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
       item.attendance,
       item.cost_basis,
       item.notes,
+      item.schedule,
       id,
       user.id,
       item.type
