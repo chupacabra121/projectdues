@@ -21,8 +21,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
 
   // Membership
   const [actives, setActives] = useState("");
-  const [currentPledges, setCurrentPledges] = useState("");
-  const [expectedPledges, setExpectedPledges] = useState("");
+  const [pledges, setPledges] = useState("");
 
   // Dues
   const [activeDues, setActiveDues] = useState("");
@@ -57,27 +56,29 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
   function confirmImport() {
     if (importResult) {
       setActives(String(importResult.activeCount));
-      setCurrentPledges(String(importResult.pledgeCount));
+      setPledges(String(importResult.pledgeCount));
     }
     setStep("membership");
   }
 
   const nActives = Math.max(0, parseInt(actives) || 0);
-  const nExpected = Math.max(0, parseInt(expectedPledges) || 0);
+  const nPledges = Math.max(0, parseInt(pledges) || 0);
   const dActive = Math.max(0, parseFloat(activeDues) || 0);
   const dPledge = Math.max(0, parseFloat(pledgeDues) || 0);
   const rate = Math.min(100, Math.max(0, parseFloat(collectionRate) || 0)) / 100;
-  const projectedRevenue = (nActives * dActive + nExpected * dPledge) * rate;
+  const projectedRevenue = (nActives * dActive + nPledges * dPledge) * rate;
 
   function finish() {
     startTransition(async () => {
       await completeOnboarding(
         {
           activeMembers: nActives,
-          currentPledges: Math.max(0, parseInt(currentPledges) || 0),
-          pledgesConservative: Math.max(0, Math.round(nExpected * 0.67)),
-          pledgesExpected: nExpected,
-          pledgesOptimistic: Math.round(nExpected * 1.4),
+          // We no longer ask for "current" vs "expected" pledges separately —
+          // a single pledge-class number drives the forecast (pledges_expected).
+          currentPledges: 0,
+          pledgesConservative: Math.max(0, Math.round(nPledges * 0.67)),
+          pledgesExpected: nPledges,
+          pledgesOptimistic: Math.round(nPledges * 1.4),
           activeDues: dActive,
           pledgeDues: dPledge,
           collectionRate: rate * 100,
@@ -226,23 +227,19 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                 <div>
                   <label className={labelCls}>Number of Brothers</label>
                   <input
-                    type="number" min={0} className={inputCls} placeholder="43"
+                    type="number" min={0} className={inputCls}
                     value={actives} onChange={(e) => setActives(e.target.value)}
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Number of Current Pledges</label>
+                  <label className={labelCls}>Pledges this semester</label>
                   <input
-                    type="number" min={0} className={inputCls} placeholder="0"
-                    value={currentPledges} onChange={(e) => setCurrentPledges(e.target.value)}
+                    type="number" min={0} className={inputCls}
+                    value={pledges} onChange={(e) => setPledges(e.target.value)}
                   />
-                </div>
-                <div>
-                  <label className={labelCls}>Expected New Pledges (this semester)</label>
-                  <input
-                    type="number" min={0} className={inputCls} placeholder="18"
-                    value={expectedPledges} onChange={(e) => setExpectedPledges(e.target.value)}
-                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    However many are pledging this term — whether they&apos;re already in or you&apos;re still recruiting.
+                  </p>
                 </div>
               </div>
               <button
@@ -268,7 +265,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-sm">$</span>
                       <input
-                        type="number" min={0} className={`${inputCls} pl-7`} placeholder="650"
+                        type="number" min={0} className={`${inputCls} pl-7`}
                         value={activeDues} onChange={(e) => setActiveDues(e.target.value)}
                       />
                     </div>
@@ -278,7 +275,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70 text-sm">$</span>
                       <input
-                        type="number" min={0} className={`${inputCls} pl-7`} placeholder="800"
+                        type="number" min={0} className={`${inputCls} pl-7`}
                         value={pledgeDues} onChange={(e) => setPledgeDues(e.target.value)}
                       />
                     </div>
@@ -300,7 +297,7 @@ export default function OnboardingWizard({ chapterName }: { chapterName: string 
                 <p className="text-xs uppercase tracking-wide text-accent-foreground">Projected Revenue</p>
                 <p className="text-3xl font-semibold mt-1 font-money text-money-up">{fmtUSD(projectedRevenue)}</p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  ({nActives} brothers × <span className="font-money">{fmtUSD(dActive)}</span> + {nExpected} new pledges × <span className="font-money">{fmtUSD(dPledge)}</span>) × {Math.round(rate * 100)}%
+                  ({nActives} brothers × <span className="font-money">{fmtUSD(dActive)}</span> + {nPledges} pledges × <span className="font-money">{fmtUSD(dPledge)}</span>) × {Math.round(rate * 100)}%
                 </p>
               </div>
 
