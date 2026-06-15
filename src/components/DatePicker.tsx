@@ -9,15 +9,20 @@ import { inputCls } from "@/components/AuthShell";
  * A themed calendar date field. Renders a trigger styled like an input plus a
  * hidden <input name={name}> so it submits with the surrounding form exactly
  * like a native date input — but clicking it pops out a month grid with
- * circular day cells. The popover is portaled to <body> with fixed positioning
- * so it can't be clipped by an `overflow-hidden` ancestor (e.g. the Budget
- * step cards).
+ * circular day cells. Click the header to drill up: day grid → month grid →
+ * year grid, for quick jumps across years. The popover is portaled to <body>
+ * with fixed positioning so it can't be clipped by an `overflow-hidden`
+ * ancestor (e.g. the Budget step cards).
  */
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
+];
+const MONTHS_SHORT = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 const POPOVER_H = 340; // approx, for the flip-up decision
 
@@ -50,6 +55,36 @@ function monthGrid(y: number, m: number): (number | null)[] {
 }
 
 type Pos = { left: number; top?: number; bottom?: number };
+type Mode = "day" | "month" | "year";
+
+/** A selectable cell in the month / year grids. */
+function GridCell({
+  label,
+  selected,
+  isToday,
+  onClick,
+}: {
+  label: string | number;
+  selected: boolean;
+  isToday: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg py-2.5 text-sm transition-colors ${
+        selected
+          ? "bg-primary font-semibold text-primary-foreground"
+          : isToday
+            ? "text-foreground ring-1 ring-primary/50 hover:bg-muted"
+            : "text-foreground hover:bg-muted"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
 
 export default function DatePicker({
   name,
@@ -62,6 +97,7 @@ export default function DatePicker({
 }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<Mode>("day");
   const [pos, setPos] = useState<Pos>({ left: 0, top: 0 });
   const parsed = parseISO(value);
   const [view, setView] = useState<{ y: number; m: number }>(() => {
@@ -113,23 +149,52 @@ export default function DatePicker({
     const p = parseISO(value);
     const now = new Date();
     setView(p ? { y: p.y, m: p.m } : { y: now.getFullYear(), m: now.getMonth() });
+    setMode("day");
     place();
     setOpen(true);
   }
+
+  // Prev/next: a day grid steps months, a month grid steps years, a year grid
+  // steps a whole 12-year page.
   function shift(delta: number) {
     setView((v) => {
+      if (mode === "year") return { ...v, y: v.y + delta * 12 };
+      if (mode === "month") return { ...v, y: v.y + delta };
       const m = v.m + delta;
       return { y: v.y + Math.floor(m / 12), m: ((m % 12) + 12) % 12 };
     });
   }
-  function pick(d: number) {
+
+  // Tapping the header drills up: day → month → year.
+  function drillUp() {
+    setMode((mo) => (mo === "day" ? "month" : "year"));
+  }
+
+  function pickDay(d: number) {
     setValue(toISO(view.y, view.m, d));
     setOpen(false);
+  }
+  function pickMonth(m: number) {
+    setView((v) => ({ ...v, m }));
+    setMode("day");
+  }
+  function pickYear(y: number) {
+    setView((v) => ({ ...v, y }));
+    setMode("month");
   }
 
   const now = new Date();
   const today = { y: now.getFullYear(), m: now.getMonth(), d: now.getDate() };
   const cells = monthGrid(view.y, view.m);
+  const yearPageStart = view.y - (((view.y % 12) + 12) % 12);
+  const years = Array.from({ length: 12 }, (_, i) => yearPageStart + i);
+
+  const headerLabel =
+    mode === "day"
+      ? `${MONTHS[view.m]} ${view.y}`
+      : mode === "month"
+        ? `${view.y}`
+        : `${yearPageStart}–${yearPageStart + 11}`;
 
   return (
     <div className="relative" ref={triggerRef}>
@@ -160,54 +225,91 @@ export default function DatePicker({
               <button
                 type="button"
                 onClick={() => shift(-1)}
-                aria-label="Previous month"
+                aria-label="Previous"
                 className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-sm font-semibold text-foreground">
-                {MONTHS[view.m]} {view.y}
-              </span>
+              <button
+                type="button"
+                onClick={drillUp}
+                disabled={mode === "year"}
+                aria-label="Switch month and year"
+                className="rounded-lg px-2.5 py-1 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:cursor-default disabled:hover:bg-transparent"
+              >
+                {headerLabel}
+              </button>
               <button
                 type="button"
                 onClick={() => shift(1)}
-                aria-label="Next month"
+                aria-label="Next"
                 className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="mb-1 grid grid-cols-7 gap-1">
-              {WEEKDAYS.map((w, i) => (
-                <span key={i} className="text-center text-[11px] font-medium text-muted-foreground">
-                  {w}
-                </span>
-              ))}
-            </div>
+            {mode === "day" && (
+              <>
+                <div className="mb-1 grid grid-cols-7 gap-1">
+                  {WEEKDAYS.map((w, i) => (
+                    <span key={i} className="text-center text-[11px] font-medium text-muted-foreground">
+                      {w}
+                    </span>
+                  ))}
+                </div>
+                <div className="grid grid-cols-7 gap-1">
+                  {cells.map((d, i) =>
+                    d === null ? (
+                      <span key={i} className="aspect-square" />
+                    ) : (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => pickDay(d)}
+                        className={`flex aspect-square w-full items-center justify-center rounded-full text-sm transition-colors ${
+                          parsed && parsed.y === view.y && parsed.m === view.m && parsed.d === d
+                            ? "bg-primary font-semibold text-primary-foreground"
+                            : today.y === view.y && today.m === view.m && today.d === d
+                              ? "text-foreground ring-1 ring-primary/50 hover:bg-muted"
+                              : "text-foreground hover:bg-muted"
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    )
+                  )}
+                </div>
+              </>
+            )}
 
-            <div className="grid grid-cols-7 gap-1">
-              {cells.map((d, i) =>
-                d === null ? (
-                  <span key={i} className="aspect-square" />
-                ) : (
-                  <button
+            {mode === "month" && (
+              <div className="grid grid-cols-3 gap-1">
+                {MONTHS_SHORT.map((label, i) => (
+                  <GridCell
                     key={i}
-                    type="button"
-                    onClick={() => pick(d)}
-                    className={`flex aspect-square w-full items-center justify-center rounded-full text-sm transition-colors ${
-                      parsed && parsed.y === view.y && parsed.m === view.m && parsed.d === d
-                        ? "bg-primary font-semibold text-primary-foreground"
-                        : today.y === view.y && today.m === view.m && today.d === d
-                          ? "text-foreground ring-1 ring-primary/50 hover:bg-muted"
-                          : "text-foreground hover:bg-muted"
-                    }`}
-                  >
-                    {d}
-                  </button>
-                )
-              )}
-            </div>
+                    label={label}
+                    selected={!!parsed && parsed.y === view.y && parsed.m === i}
+                    isToday={today.y === view.y && today.m === i}
+                    onClick={() => pickMonth(i)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {mode === "year" && (
+              <div className="grid grid-cols-3 gap-1">
+                {years.map((y) => (
+                  <GridCell
+                    key={y}
+                    label={y}
+                    selected={!!parsed && parsed.y === y}
+                    isToday={today.y === y}
+                    onClick={() => pickYear(y)}
+                  />
+                ))}
+              </div>
+            )}
 
             <div className="mt-2 flex items-center justify-between border-t border-border/60 pt-2">
               <button
