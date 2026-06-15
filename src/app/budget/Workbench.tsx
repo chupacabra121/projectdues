@@ -9,9 +9,11 @@ import {
   buildForecast,
   ForecastSettings,
   fmtUSD,
+  fmtDate,
   itemSemesterCost,
   tierGross,
 } from "@/lib/forecast";
+import { buildCashCurve } from "@/lib/cashflow";
 import { AddItemForm, ItemRow } from "./ItemForms";
 import { inputCls } from "@/components/AuthShell";
 
@@ -123,6 +125,11 @@ export default function Workbench({
     [live, items, caps]
   );
 
+  // The cash curve over the semester — same inputs, recomputed live so the
+  // timing consequence of a plan (its lowest point) is visible while you edit,
+  // not just on the dashboard. buildCashCurve is pure / client-safe.
+  const curve = useMemo(() => buildCashCurve(live, items), [live, items]);
+
   // Debounced auto-save of the Money In panel.
   useEffect(() => {
     if (firstRender.current) {
@@ -179,6 +186,9 @@ export default function Workbench({
   const safeToSpend = toWorkWith - reserve; // the real budget for events
   const eventsTotal = forecast.plannedEvents;
   const left = forecast.remainingBalance; // toWorkWith − events = projected end balance
+  // Undated expense items collapse to day 0 in the cash curve (assumed due now);
+  // count them so the trough can flag that assumption honestly.
+  const undatedBills = items.filter((i) => i.type !== "other_income" && !i.date).length;
 
   return (
     <>
@@ -386,6 +396,17 @@ export default function Workbench({
           {fmtUSD(safeToSpend)}
         </p>
       </div>
+
+      {/* The seam's timing reality: the lowest the balance gets on the way to
+          that end number — bills vs dues, previously dashboard-only. */}
+      {curve && (
+        <CashFloor
+          balance={curve.min.balance}
+          date={curve.min.date}
+          reserve={reserve}
+          undatedBills={undatedBills}
+        />
+      )}
 
       {/* ── STEP 3 · PLAN EVENTS ──────────────────────────────────────── */}
       <Step n={3} title="Plan Events" subtitle="Spend the working budget — stay under your caps"
@@ -606,6 +627,63 @@ function ItemList({
         ))}
       </div>
       <AddItemForm type={type} />
+    </div>
+  );
+}
+
+/**
+ * The timing reality beneath the spendable total: the lowest the projected
+ * balance gets on the way to the end number. A semester can total green while
+ * cash goes underwater mid-way (bills land before dues finish arriving), so it
+ * sits right at the spend seam. Non-emerald — this is a constraint, not a
+ * spendable outcome: red below zero, amber below the reserve, neutral when it
+ * clears. The full week-by-week curve lives on the dashboard.
+ */
+function CashFloor({
+  balance,
+  date,
+  reserve,
+  undatedBills,
+}: {
+  balance: number;
+  date: string;
+  reserve: number;
+  undatedBills: number;
+}) {
+  const below = balance < 0;
+  const belowReserve = !below && reserve > 0 && balance < reserve;
+  const tone = below
+    ? "text-money-down"
+    : belowReserve
+      ? "text-warning"
+      : "text-foreground";
+  const caption = below
+    ? "Bills land before dues finish coming in — you'll need cash in hand by then."
+    : belowReserve
+      ? `Dips below your ${fmtUSD(reserve)} reserve mid-semester.`
+      : "Your tightest week still clears.";
+  return (
+    <div className="-mt-3 mb-6 rounded-2xl border border-border/60 bg-muted/20 px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="flex items-baseline gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+            Lowest cash
+          </span>
+          <span className={`font-money text-xl font-semibold ${tone}`}>{fmtUSD(balance)}</span>
+          <span className="text-sm text-muted-foreground">· {fmtDate(date)}</span>
+        </p>
+        <Link
+          href="/dashboard"
+          className="text-xs font-medium text-accent-foreground hover:underline"
+        >
+          See the full cash timeline →
+        </Link>
+      </div>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {caption}
+        {undatedBills > 0 &&
+          ` · ${undatedBills} undated bill${undatedBills === 1 ? "" : "s"} assumed due now`}
+      </p>
     </div>
   );
 }
