@@ -462,6 +462,7 @@ function buildInsights(
     revenueFor(s, s.pledges_conservative) +
     f.otherIncome -
     f.fixedObligations -
+    variableObligationsFor(items, s, s.pledges_conservative) -
     f.plannedEvents;
   if (f.remainingBalance >= 0 && conservativeRemaining < 0) {
     insights.push({

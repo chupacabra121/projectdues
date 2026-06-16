@@ -33,7 +33,10 @@ export function memberEffectiveDues(
 ): number {
   if (aidAmount != null) return Math.max(0, aidAmount);
   if (aidPlan == null) return Math.max(0, setRate);
-  return Math.max(0, plans[aidPlan]?.amount ?? 0);
+  // A dangling plan index (e.g. the plan was deleted) reverts the member to
+  // their status rate — never silently to $0.
+  const plan = plans[aidPlan];
+  return Math.max(0, plan ? plan.amount : setRate);
 }
 
 /**
