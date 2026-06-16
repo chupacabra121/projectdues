@@ -128,9 +128,15 @@ export async function setDuesPlans(formData: FormData): Promise<void> {
       name: String(d?.name ?? "").trim().slice(0, 40) || "Plan",
       amount: clampMoney(d?.amount),
     }));
-  getDb()
-    .prepare("UPDATE periods SET dues_plans = ? WHERE id = ? AND user_id = ?")
+  const db = getDb();
+  db.prepare("UPDATE periods SET dues_plans = ? WHERE id = ? AND user_id = ?")
     .run(JSON.stringify(plans), period.id, user.id);
+  // Members pointing at a plan index that no longer exists revert to their
+  // status rate — clear the dangling reference so a future plan added at that
+  // index can't silently re-price them.
+  db.prepare(
+    "UPDATE members SET aid_plan = NULL WHERE user_id = ? AND period_id = ? AND aid_plan >= ?"
+  ).run(user.id, period.id, plans.length);
   recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }

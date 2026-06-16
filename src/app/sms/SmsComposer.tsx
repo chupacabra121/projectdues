@@ -174,6 +174,16 @@ export default function SmsComposer({
     startTransition(() => logMembersContact(fd));
   }
 
+  // Marking contact happens only on explicit confirmation — opening or copying
+  // a draft no longer implies the text was actually sent.
+  function markSent(ids: number[]) {
+    if (ids.length === 0) return;
+    const ok = window.confirm(
+      `Mark ${ids.length} member${ids.length === 1 ? "" : "s"} as contacted? Do this only after you've actually sent the text.`
+    );
+    if (ok) logContacts(ids);
+  }
+
   async function copyText(label: string, text: string) {
     let ok = true;
     try {
@@ -339,16 +349,25 @@ export default function SmsComposer({
                       {member.phone}
                     </p>
                   </div>
-                  <a
-                    href={`sms:${cleanPhone(member.phone)}?&body=${encodeURIComponent(
-                      renderTemplate(message, member, period, chapterName, paymentLink)
-                    )}`}
-                    onClick={() => logContacts([member.id])}
-                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
-                  >
-                    <Smartphone className="h-3.5 w-3.5" />
-                    Draft
-                  </a>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <a
+                      href={`sms:${cleanPhone(member.phone)}?&body=${encodeURIComponent(
+                        renderTemplate(message, member, period, chapterName, paymentLink)
+                      )}`}
+                      className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-2.5 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                      Draft
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => logContacts([member.id])}
+                      title="Mark this member as contacted"
+                      className="inline-flex h-8 items-center gap-1 rounded-full border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-accent-foreground"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -424,7 +443,6 @@ export default function SmsComposer({
           <div className="mt-5 flex flex-wrap items-center gap-2">
             <a
               href={smsHref}
-              onClick={() => logContacts(recipients.map((member) => member.id))}
               className={`inline-flex h-10 items-center gap-2 rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 ${
                 recipients.length === 0 ? "pointer-events-none opacity-50" : ""
               }`}
@@ -435,30 +453,44 @@ export default function SmsComposer({
             </a>
             <button
               type="button"
-              onClick={() => {
-                copyText("Message", broadcastMessage);
-                logContacts(recipients.map((member) => member.id));
-              }}
+              onClick={() => copyText("Message", broadcastMessage)}
               className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
             >
               <Copy className="h-4 w-4" />
               Copy Message
             </button>
+            <button
+              type="button"
+              onClick={() => markSent(recipients.map((member) => member.id))}
+              disabled={recipients.length === 0}
+              className="inline-flex h-10 items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-primary/20 disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" />
+              Mark as sent
+            </button>
           </div>
         ) : (
           <div className="mt-5">
-            <button
-              type="button"
-              onClick={() => {
-                copyText("Individual texts", allIndividualDrafts);
-                logContacts(individualDrafts.map((draft) => draft.member.id));
-              }}
-              disabled={individualDrafts.length === 0}
-              className="mb-3 inline-flex h-10 items-center gap-2 rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-            >
-              <Copy className="h-4 w-4" />
-              Copy All Texts
-            </button>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => copyText("Individual texts", allIndividualDrafts)}
+                disabled={individualDrafts.length === 0}
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-border bg-background px-4 text-sm font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+              >
+                <Copy className="h-4 w-4" />
+                Copy All Texts
+              </button>
+              <button
+                type="button"
+                onClick={() => markSent(individualDrafts.map((draft) => draft.member.id))}
+                disabled={individualDrafts.length === 0}
+                className="inline-flex h-10 items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-4 text-sm font-semibold text-accent-foreground transition-colors hover:bg-primary/20 disabled:opacity-50"
+              >
+                <Check className="h-4 w-4" />
+                Mark all as sent
+              </button>
+            </div>
             <div className="max-h-96 space-y-3 overflow-y-auto pr-1">
               {individualDrafts.map((draft) => (
                 <div
@@ -474,16 +506,25 @@ export default function SmsComposer({
                         {draft.member.phone}
                       </p>
                     </div>
-                    <a
-                      href={`sms:${cleanPhone(
-                        draft.member.phone
-                      )}?&body=${encodeURIComponent(draft.message)}`}
-                      onClick={() => logContacts([draft.member.id])}
-                      className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                      Draft
-                    </a>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <a
+                        href={`sms:${cleanPhone(
+                          draft.member.phone
+                        )}?&body=${encodeURIComponent(draft.message)}`}
+                        className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Draft
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => logContacts([draft.member.id])}
+                        title="Mark this member as contacted"
+                        className="inline-flex h-8 items-center gap-1 rounded-full border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/50 hover:text-accent-foreground"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <p className="mt-2 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">
                     {draft.message}

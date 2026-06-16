@@ -111,18 +111,17 @@ function dailyFlows(
       item.type === "variable_expense"
         ? itemSemesterCost(item, s)
         : effectiveAmount(item);
-    // A deposit/balance split places each dated part separately — but only on
-    // the PLANNED amount: once a real cost is known (actual_amount) the parts no
-    // longer add up, so we fall back to a single hit on the item's date.
+    // A deposit/balance split places each dated part on its own date. When a
+    // real cost is recorded (actual_amount), scale the split to the new total so
+    // the timing survives — don't collapse the whole amount onto the deposit day.
     const schedule =
-      item.actual_amount == null &&
-      item.frequency !== "monthly" &&
-      item.schedule &&
-      item.schedule.length > 0
+      item.frequency !== "monthly" && item.schedule && item.schedule.length > 0
         ? item.schedule
         : null;
     if (schedule) {
-      for (const p of schedule) bucket[clampDay(p.date)] += p.amount;
+      const planned = schedule.reduce((sum2, p) => sum2 + p.amount, 0);
+      const factor = planned > 0 ? amount / planned : 0;
+      for (const p of schedule) bucket[clampDay(p.date)] += p.amount * factor;
     } else if (item.frequency === "monthly") {
       const dayOfMonth = item.date ? Number(item.date.slice(8, 10)) : 1;
       const cursor = new Date(
