@@ -17,15 +17,60 @@ import {
   MAX_CUSTOM_CATEGORIES,
 } from "./memberDues";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// The database lives at DATABASE_PATH when set — point this at a mounted
+// persistent volume in production (e.g. /data/simpledues.db on Railway) so a
+// redeploy can't wipe it. Defaults to ./data for local development.
+const DB_PATH =
+  process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "simpledues.db");
+const DATA_DIR = path.dirname(DB_PATH);
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 declare global {
   var __simpleduesDb: Database.Database | undefined;
 }
 
+/**
+ * Snapshot the existing database before this process opens it, so a bad
+ * migration or a corrupted write is always recoverable. Backups sit next to the
+ * DB (same volume) under backups/, newest ~10 kept. Taken before the connection
+ * opens — no other writer is active then, so main + WAL + SHM copy as one
+ * consistent set. A failure here must never stop the app from starting.
+ */
+function backupDatabase(): void {
+  if (!fs.existsSync(DB_PATH)) return; // first run — nothing to back up yet
+  try {
+    const backupsDir = path.join(DATA_DIR, "backups");
+    fs.mkdirSync(backupsDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = path.basename(DB_PATH);
+    for (const suffix of ["", "-wal", "-shm"]) {
+      const src = DB_PATH + suffix;
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(backupsDir, `${base}.${stamp}${suffix}`));
+      }
+    }
+    // Retain the newest ~10 snapshots; drop older sets (main file + companions).
+    const snaps = fs
+      .readdirSync(backupsDir)
+      .filter(
+        (f) =>
+          f.startsWith(`${base}.`) && !f.endsWith("-wal") && !f.endsWith("-shm")
+      )
+      .sort();
+    for (const old of snaps.slice(0, Math.max(0, snaps.length - 10))) {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        const f = path.join(backupsDir, old + suffix);
+        if (fs.existsSync(f)) fs.rmSync(f);
+      }
+    }
+  } catch (err) {
+    console.error("[db] backup before migrations failed (continuing):", err);
+  }
+}
+
 function createDb(): Database.Database {
-  const db = new Database(path.join(DATA_DIR, "simpledues.db"));
+  backupDatabase();
+  const db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
