@@ -10,6 +10,7 @@ import {
   recomputeDerivedDues,
 } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { setFlash } from "@/lib/flash";
 
 export interface OnboardingPayload {
   activeMembers: number;
@@ -147,7 +148,10 @@ export async function updateBudgetSettings(
 ): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!period) {
+    await setFlash("No active period — your changes didn't save.", "warn");
+    return;
+  }
   const sem = defaultSemester();
 
   // active_members, the aid breakdown, and dues_collected are all derived

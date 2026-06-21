@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   ClipboardList,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { importMembers, ImportMemberInput, ImportSummary } from "@/app/actions/members";
 import {
@@ -202,6 +203,16 @@ function ImportModal({ onClose }: { onClose: () => void }) {
 
               {members.length > 0 && (
                 <div className="mt-4 rounded-2xl border border-border bg-card/40 p-4">
+                  {result && !result.statusColumn && (
+                    <div className="mb-3 flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+                      <span>
+                        No status column found — alumni and inactive rows can&apos;t be
+                        picked out, so everyone imports with the status chosen below.
+                        Use a sheet with a Status column, or edit statuses after import.
+                      </span>
+                    </div>
+                  )}
                   <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm text-foreground">
                       <span className="font-money font-semibold">{members.length}</span>{" "}

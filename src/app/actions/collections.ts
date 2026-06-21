@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { getActivePeriod, getDb, recomputeDerivedDues } from "@/lib/db";
+import { setFlash } from "@/lib/flash";
 import {
   COLLECTION_STAGES,
   CONTACT_CHANNELS,
@@ -56,7 +57,10 @@ function placeholders(count: number): string {
 export async function setPaymentInstructions(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!period) {
+    await setFlash("No active period to update.", "warn");
+    return;
+  }
   const instructions = String(formData.get("paymentInstructions") ?? "")
     .trim()
     .slice(0, 500);
@@ -73,9 +77,11 @@ export async function setPaymentInstructions(formData: FormData): Promise<void> 
 export async function setMemberCollectionStage(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!period || !id) {
+    await setFlash("Couldn't update that member — try again.", "warn");
+    return;
+  }
   const stage = parseStage(formData.get("stage"));
   const paid = stage === "paid" ? 1 : 0;
 
@@ -95,9 +101,11 @@ export async function setMemberCollectionStage(formData: FormData): Promise<void
 export async function setMembersCollectionStage(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
   const ids = memberIds(formData);
-  if (ids.length === 0) return;
+  if (!period || ids.length === 0) {
+    await setFlash("Select at least one member first.", "warn");
+    return;
+  }
   const stage = parseStage(formData.get("stage"));
   const paid = stage === "paid" ? 1 : 0;
 
@@ -117,9 +125,11 @@ export async function setMembersCollectionStage(formData: FormData): Promise<voi
 export async function logMemberContact(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!period || !id) {
+    await setFlash("Couldn't log that contact — try again.", "warn");
+    return;
+  }
   const channel = parseChannel(formData.get("channel"));
   const stage = parseStage(formData.get("stage") ?? "reminder_sent");
 
@@ -143,9 +153,11 @@ export async function logMemberContact(formData: FormData): Promise<void> {
 export async function logMembersContact(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
   const ids = memberIds(formData);
-  if (ids.length === 0) return;
+  if (!period || ids.length === 0) {
+    await setFlash("Select at least one member first.", "warn");
+    return;
+  }
   const channel = parseChannel(formData.get("channel"));
   const stage = parseStage(formData.get("stage") ?? "reminder_sent");
 

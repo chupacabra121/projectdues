@@ -1,12 +1,14 @@
 import Header from "./Header";
 import WorkspaceShell from "./WorkspaceShell";
+import Toaster from "./Toaster";
 import { getActivePeriod, getPeriods } from "@/lib/db";
+import { getFlash } from "@/lib/flash";
 
 /**
  * Top chrome for the signed-in app: brand + main tabs + period switcher, with
  * the agent team strip right below — every page shares it.
  */
-export default function AppShell({
+export default async function AppShell({
   chapterName,
   userId,
   children,
@@ -22,6 +24,7 @@ export default function AppShell({
     end: p.semester_end,
   }));
   const active = getActivePeriod(userId);
+  const flash = await getFlash();
   return (
     <>
       <Header
@@ -32,6 +35,7 @@ export default function AppShell({
       <main className="grid-substrate relative z-[1] flex-1">
         <WorkspaceShell>{children}</WorkspaceShell>
       </main>
+      <Toaster flash={flash} />
     </>
   );
 }

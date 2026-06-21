@@ -10,6 +10,7 @@ import {
 } from "@/lib/db";
 import { MAX_DUES_PLANS } from "@/lib/memberDues";
 import { requireUser } from "@/lib/auth";
+import { setFlash } from "@/lib/flash";
 
 const PATHS = [
   "/dashboard",
@@ -36,9 +37,11 @@ function clampMoney(v: unknown): number {
 export async function setMemberDuesPlan(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!id || !period) {
+    await setFlash("Couldn't update that member — try again.", "warn");
+    return;
+  }
   const raw = String(formData.get("plan") ?? "");
   let plan: number | null = null;
   if (raw !== "" && raw !== "full") {
@@ -51,9 +54,9 @@ export async function setMemberDuesPlan(formData: FormData): Promise<void> {
   // treasurer can then type an individual override.
   getDb()
     .prepare(
-      "UPDATE members SET aid_plan = ?, aid_amount = NULL WHERE id = ? AND user_id = ?"
+      "UPDATE members SET aid_plan = ?, aid_amount = NULL WHERE id = ? AND user_id = ? AND period_id = ?"
     )
-    .run(plan, id, user.id);
+    .run(plan, id, user.id, period.id);
   recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
@@ -62,14 +65,18 @@ export async function setMemberDuesPlan(formData: FormData): Promise<void> {
 export async function setMemberAidAmount(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!id || !period) {
+    await setFlash("Couldn't update that member — try again.", "warn");
+    return;
+  }
   const raw = String(formData.get("amount") ?? "").trim();
   const amount = raw === "" ? null : clampMoney(raw);
   getDb()
-    .prepare("UPDATE members SET aid_amount = ? WHERE id = ? AND user_id = ?")
-    .run(amount, id, user.id);
+    .prepare(
+      "UPDATE members SET aid_amount = ? WHERE id = ? AND user_id = ? AND period_id = ?"
+    )
+    .run(amount, id, user.id, period.id);
   recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
@@ -78,19 +85,22 @@ export async function setMemberAidAmount(formData: FormData): Promise<void> {
 export async function setMemberDuesPaid(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
   const period = getActivePeriod(user.id);
+  if (!id || !period) {
+    await setFlash("Couldn't update that member — try again.", "warn");
+    return;
+  }
   const paid = String(formData.get("paid")) === "1" ? 1 : 0;
   getDb()
     .prepare(
       `UPDATE members
        SET dues_paid = ?,
            collection_stage = CASE WHEN ? = 1 THEN 'paid' ELSE collection_stage END
-       WHERE id = ? AND user_id = ?`
+       WHERE id = ? AND user_id = ? AND period_id = ?`
     )
-    .run(paid, paid, id, user.id);
+    .run(paid, paid, id, user.id, period.id);
   // Roll the checkbox into the period's collected-to-date.
-  if (period) recomputeDerivedDues(user.id, period.id);
+  recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
 
@@ -98,7 +108,10 @@ export async function setMemberDuesPaid(formData: FormData): Promise<void> {
 export async function setDuesRates(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!period) {
+    await setFlash("No active period to update.", "warn");
+    return;
+  }
   const activeDues = clampMoney(formData.get("activeDues"));
   const pledgeDues = clampMoney(formData.get("pledgeDues"));
   getDb()
@@ -114,14 +127,21 @@ export async function setDuesRates(formData: FormData): Promise<void> {
 export async function setDuesPlans(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!period) {
+    await setFlash("No active period to update.", "warn");
+    return;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(String(formData.get("plans") ?? "[]"));
   } catch {
+    await setFlash("Those plan edits didn't save — try again.", "warn");
     return;
   }
-  if (!Array.isArray(parsed) || parsed.length === 0) return;
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    await setFlash("Those plan edits didn't save — try again.", "warn");
+    return;
+  }
   const plans = parsed
     .slice(0, MAX_DUES_PLANS)
     .map((d: { name?: unknown; amount?: unknown }) => ({
@@ -143,7 +163,10 @@ export async function setDuesPlans(formData: FormData): Promise<void> {
 export async function setCustomCategories(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!period) {
+    await setFlash("No active period to update.", "warn");
+    return;
+  }
   const cats = parseCustomCategories(formData.get("categories"));
   const db = getDb();
   db.prepare(

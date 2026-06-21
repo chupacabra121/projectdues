@@ -10,6 +10,7 @@ import {
 } from "@/lib/db";
 import { MEMBER_STATUSES, MemberStatus } from "@/lib/memberStatus";
 import { requireUser } from "@/lib/auth";
+import { setFlash } from "@/lib/flash";
 
 const PATHS = [
   "/dashboard",
@@ -73,7 +74,10 @@ export async function importMembers(
   const summary: ImportSummary = { imported: 0, duplicates: 0, skipped: 0 };
   const user = await requireUser();
   const period = getActivePeriod(user.id);
-  if (!period || !Array.isArray(rows)) return summary;
+  if (!period || !Array.isArray(rows)) {
+    await setFlash("Import needs an active period — try again.", "warn");
+    return summary;
+  }
 
   const db = getDb();
   const existing = db
@@ -126,9 +130,11 @@ export async function importMembers(
 export async function addMember(formData: FormData): Promise<void> {
   const user = await requireUser();
   const name = cleanContact(formData.get("name"));
-  if (!name) return;
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!name || !period) {
+    await setFlash("Add a name to create the member.", "warn");
+    return;
+  }
   getDb()
     .prepare(
       "INSERT INTO members (user_id, period_id, name, email, phone, status) VALUES (?, ?, ?, ?, ?, ?)"
@@ -149,17 +155,20 @@ export async function updateMember(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
   const name = cleanContact(formData.get("name"));
-  if (!id || !name) return;
   const period = getActivePeriod(user.id);
+  if (!id || !name || !period) {
+    await setFlash("Couldn't save that member — try again.", "warn");
+    return;
+  }
   const email = cleanContact(formData.get("email"));
   const phone = cleanContact(formData.get("phone"), 40);
   const status = parseStatus(formData.get("status"));
   // The edit form carries tags; other callers may not — only touch tags when present.
-  if (formData.has("tags") && period) {
+  if (formData.has("tags")) {
     getDb()
       .prepare(
         `UPDATE members SET name = ?, email = ?, phone = ?, status = ?, tags = ?
-         WHERE id = ? AND user_id = ?`
+         WHERE id = ? AND user_id = ? AND period_id = ?`
       )
       .run(
         name,
@@ -168,17 +177,18 @@ export async function updateMember(formData: FormData): Promise<void> {
         status,
         cleanTags(formData.get("tags"), period.id, user.id),
         id,
-        user.id
+        user.id,
+        period.id
       );
   } else {
     getDb()
       .prepare(
         `UPDATE members SET name = ?, email = ?, phone = ?, status = ?
-         WHERE id = ? AND user_id = ?`
+         WHERE id = ? AND user_id = ? AND period_id = ?`
       )
-      .run(name, email, phone, status, id, user.id);
+      .run(name, email, phone, status, id, user.id, period.id);
   }
-  if (period) recomputeDerivedDues(user.id, period.id);
+  recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
 
@@ -190,13 +200,18 @@ export async function updateMember(formData: FormData): Promise<void> {
 export async function setMemberStatus(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
-  const status = parseStatus(formData.get("status"));
   const period = getActivePeriod(user.id);
+  if (!id || !period) {
+    await setFlash("Couldn't move that member — try again.", "warn");
+    return;
+  }
+  const status = parseStatus(formData.get("status"));
   getDb()
-    .prepare("UPDATE members SET status = ? WHERE id = ? AND user_id = ?")
-    .run(status, id, user.id);
-  if (period) recomputeDerivedDues(user.id, period.id);
+    .prepare(
+      "UPDATE members SET status = ? WHERE id = ? AND user_id = ? AND period_id = ?"
+    )
+    .run(status, id, user.id, period.id);
+  recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
 
@@ -204,12 +219,16 @@ export async function setMemberStatus(formData: FormData): Promise<void> {
 export async function setMemberTags(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!id || !period) {
+    await setFlash("Couldn't save those tags — try again.", "warn");
+    return;
+  }
   getDb()
-    .prepare("UPDATE members SET tags = ? WHERE id = ? AND user_id = ?")
-    .run(cleanTags(formData.get("tags"), period.id, user.id), id, user.id);
+    .prepare(
+      "UPDATE members SET tags = ? WHERE id = ? AND user_id = ? AND period_id = ?"
+    )
+    .run(cleanTags(formData.get("tags"), period.id, user.id), id, user.id, period.id);
   recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }
@@ -218,11 +237,14 @@ export async function setMemberTags(formData: FormData): Promise<void> {
 export async function deleteMember(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
   const period = getActivePeriod(user.id);
+  if (!id || !period) {
+    await setFlash("Couldn't delete that member — try again.", "warn");
+    return;
+  }
   getDb()
-    .prepare("DELETE FROM members WHERE id = ? AND user_id = ?")
-    .run(id, user.id);
-  if (period) recomputeDerivedDues(user.id, period.id);
+    .prepare("DELETE FROM members WHERE id = ? AND user_id = ? AND period_id = ?")
+    .run(id, user.id, period.id);
+  recomputeDerivedDues(user.id, period.id);
   revalidateAll();
 }

@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { getDb, getActivePeriod } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { setFlash } from "@/lib/flash";
 import {
   categorizeEvent,
   categorizeExpense,
@@ -128,9 +129,11 @@ function parseItemForm(formData: FormData): ParsedItem | null {
 export async function addBudgetItem(formData: FormData): Promise<void> {
   const user = await requireUser();
   const item = parseItemForm(formData);
-  if (!item) return;
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!item || !period) {
+    await setFlash("Couldn't save that budget item — check the entry and try again.", "warn");
+    return;
+  }
   // New items carry no actual yet — actuals are recorded on the Plan vs
   // Actual page once a cost is known.
   getDb()
@@ -159,7 +162,10 @@ export async function updateBudgetItem(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
   const item = parseItemForm(formData);
-  if (!id || !item) return;
+  if (!id || !item) {
+    await setFlash("Couldn't save that budget item — try again.", "warn");
+    return;
+  }
   // Planning fields only — actual_amount is owned by the Plan vs Actual page
   // and deliberately left untouched here.
   getDb()
@@ -189,7 +195,10 @@ export async function updateBudgetItemCategory(formData: FormData): Promise<void
   const user = await requireUser();
   const id = Number(formData.get("id"));
   const category = String(formData.get("category") ?? "").trim();
-  if (!id || !category) return;
+  if (!id || !category) {
+    await setFlash("Couldn't change that category — try again.", "warn");
+    return;
+  }
   getDb()
     .prepare("UPDATE budget_items SET category = ? WHERE id = ? AND user_id = ?")
     .run(category, id, user.id);
@@ -200,9 +209,11 @@ export async function updateBudgetItemCategory(formData: FormData): Promise<void
 export async function setCategoryCap(formData: FormData): Promise<void> {
   const user = await requireUser();
   const category = String(formData.get("category") ?? "").trim();
-  if (!category) return;
   const period = getActivePeriod(user.id);
-  if (!period) return;
+  if (!category || !period) {
+    await setFlash("Couldn't save that allocation — try again.", "warn");
+    return;
+  }
   const cap = parseAmount(formData.get("cap"));
   const db = getDb();
   if (cap > 0) {
@@ -226,7 +237,10 @@ export async function setCategoryCap(formData: FormData): Promise<void> {
 export async function setActualAmount(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!id) {
+    await setFlash("Couldn't record that actual — try again.", "warn");
+    return;
+  }
   const raw = String(formData.get("actual") ?? "").trim();
   const actual = raw === "" ? null : parseAmount(raw);
   getDb()
@@ -239,7 +253,10 @@ export async function setActualAmount(formData: FormData): Promise<void> {
 export async function setBillPaid(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!id) {
+    await setFlash("Couldn't update that bill — try again.", "warn");
+    return;
+  }
   const paid = String(formData.get("paid")) === "1" ? 1 : 0;
   getDb()
     .prepare("UPDATE budget_items SET paid = ? WHERE id = ? AND user_id = ?")
@@ -250,7 +267,10 @@ export async function setBillPaid(formData: FormData): Promise<void> {
 export async function deleteBudgetItem(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!id) {
+    await setFlash("Couldn't delete that item — try again.", "warn");
+    return;
+  }
   getDb()
     .prepare("DELETE FROM budget_items WHERE id = ? AND user_id = ?")
     .run(id, user.id);
