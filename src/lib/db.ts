@@ -17,15 +17,60 @@ import {
   MAX_CUSTOM_CATEGORIES,
 } from "./memberDues";
 
-const DATA_DIR = path.join(process.cwd(), "data");
+// The database lives at DATABASE_PATH when set — point this at a mounted
+// persistent volume in production (e.g. /data/simpledues.db on Railway) so a
+// redeploy can't wipe it. Defaults to ./data for local development.
+const DB_PATH =
+  process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "simpledues.db");
+const DATA_DIR = path.dirname(DB_PATH);
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 declare global {
   var __simpleduesDb: Database.Database | undefined;
 }
 
+/**
+ * Snapshot the existing database before this process opens it, so a bad
+ * migration or a corrupted write is always recoverable. Backups sit next to the
+ * DB (same volume) under backups/, newest ~10 kept. Taken before the connection
+ * opens — no other writer is active then, so main + WAL + SHM copy as one
+ * consistent set. A failure here must never stop the app from starting.
+ */
+function backupDatabase(): void {
+  if (!fs.existsSync(DB_PATH)) return; // first run — nothing to back up yet
+  try {
+    const backupsDir = path.join(DATA_DIR, "backups");
+    fs.mkdirSync(backupsDir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const base = path.basename(DB_PATH);
+    for (const suffix of ["", "-wal", "-shm"]) {
+      const src = DB_PATH + suffix;
+      if (fs.existsSync(src)) {
+        fs.copyFileSync(src, path.join(backupsDir, `${base}.${stamp}${suffix}`));
+      }
+    }
+    // Retain the newest ~10 snapshots; drop older sets (main file + companions).
+    const snaps = fs
+      .readdirSync(backupsDir)
+      .filter(
+        (f) =>
+          f.startsWith(`${base}.`) && !f.endsWith("-wal") && !f.endsWith("-shm")
+      )
+      .sort();
+    for (const old of snaps.slice(0, Math.max(0, snaps.length - 10))) {
+      for (const suffix of ["", "-wal", "-shm"]) {
+        const f = path.join(backupsDir, old + suffix);
+        if (fs.existsSync(f)) fs.rmSync(f);
+      }
+    }
+  } catch (err) {
+    console.error("[db] backup before migrations failed (continuing):", err);
+  }
+}
+
 function createDb(): Database.Database {
-  const db = new Database(path.join(DATA_DIR, "simpledues.db"));
+  backupDatabase();
+  const db = new Database(DB_PATH);
   db.pragma("journal_mode = WAL");
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
@@ -128,6 +173,11 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
   addColumnIfMissing(db, "budget_items", "paid", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "budget_items", "schedule", "TEXT");
+  addColumnIfMissing(db, "users", "first_name", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "last_name", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "phone", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "title", "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing(db, "users", "preferences", "TEXT");
   addColumnIfMissing(db, "members", "tags", "TEXT NOT NULL DEFAULT '[]'");
   addColumnIfMissing(db, "periods", "custom_categories", "TEXT");
   addColumnIfMissing(db, "periods", "custom_tier_breakdowns", "TEXT");
@@ -613,6 +663,44 @@ export interface UserRow {
   email: string;
   password_hash: string;
   chapter_name: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  /** The person's role on the chapter exec, e.g. "Treasurer". */
+  title: string;
+  /** JSON of account preferences (notifications, display, etc.); null = defaults. */
+  preferences: string | null;
+}
+
+/** Account-level preferences shown in the Settings page (Notifications). */
+export interface UserPreferences {
+  emailNotifications: boolean;
+  smsNotifications: boolean;
+  duesReminders: boolean;
+  weeklySummary: boolean;
+  paymentAlerts: boolean;
+  notifyFrequency: string; // realtime | daily | weekly
+}
+
+export const DEFAULT_USER_PREFERENCES: UserPreferences = {
+  emailNotifications: true,
+  smsNotifications: false,
+  duesReminders: true,
+  weeklySummary: true,
+  paymentAlerts: true,
+  notifyFrequency: "daily",
+};
+
+/** Stored preferences merged over the defaults (so new keys always resolve). */
+export function parseUserPreferences(raw: unknown): UserPreferences {
+  if (typeof raw !== "string" || !raw) return { ...DEFAULT_USER_PREFERENCES };
+  try {
+    const p = JSON.parse(raw);
+    if (!p || typeof p !== "object") return { ...DEFAULT_USER_PREFERENCES };
+    return { ...DEFAULT_USER_PREFERENCES, ...(p as Partial<UserPreferences>) };
+  } catch {
+    return { ...DEFAULT_USER_PREFERENCES };
+  }
 }
 
 /** User-level settings; per-semester numbers live on PeriodRow now. */

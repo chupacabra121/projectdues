@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useTransition, ViewTransition } from "react";
-import { Building2, CalendarRange, Check, ChevronDown, Clock3, Moon, Plus, Sun, Users } from "lucide-react";
+import { Building2, CalendarRange, Check, ChevronDown, Clock3, Moon, Plus, Settings, Sun, Users } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { setActivePeriod } from "@/app/actions/periods";
 import { LayoutDashboard } from "lucide-react";
@@ -76,6 +76,14 @@ export default function Header({
             <Building2 className="h-4 w-4 text-muted-foreground" />
             <span className="max-w-[160px] truncate">{chapterName}</span>
           </span>
+          <Link
+            href="/settings"
+            aria-label="Settings"
+            title="Settings"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors hover:border-border-strong hover:text-foreground"
+          >
+            <Settings className="h-4 w-4" />
+          </Link>
           <ThemeToggle />
           <form action={logout}>
             <button className="text-sm text-muted-foreground transition-colors hover:text-foreground">
