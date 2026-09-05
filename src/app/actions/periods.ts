@@ -11,6 +11,7 @@ import {
   recomputeDerivedDues,
 } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
+import { setFlash } from "@/lib/flash";
 
 const PATHS = ["/dashboard", "/budget", "/assumptions", "/actuals", "/members", "/scenarios", "/periods"];
 
@@ -26,11 +27,17 @@ function parseIso(v: unknown): string | null {
 export async function setActivePeriod(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!id) {
+    await setFlash("Couldn't switch periods — try again.", "warn");
+    return;
+  }
   const owned = getDb()
     .prepare("SELECT id FROM periods WHERE id = ? AND user_id = ?")
     .get(id, user.id);
-  if (!owned) return;
+  if (!owned) {
+    await setFlash("That period isn't yours to open.", "warn");
+    return;
+  }
   getDb()
     .prepare("UPDATE settings SET active_period_id = ? WHERE user_id = ?")
     .run(id, user.id);
@@ -41,7 +48,10 @@ export async function renamePeriod(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
   const name = String(formData.get("name") ?? "").trim().slice(0, 60);
-  if (!id || !name) return;
+  if (!id || !name) {
+    await setFlash("Couldn't rename that period — try again.", "warn");
+    return;
+  }
   getDb()
     .prepare("UPDATE periods SET name = ? WHERE id = ? AND user_id = ?")
     .run(name, id, user.id);
@@ -60,7 +70,10 @@ export async function createPeriod(formData: FormData): Promise<void> {
 
   const start = parseIso(formData.get("start"));
   const end = parseIso(formData.get("end"));
-  if (!start || !end || end <= start) return;
+  if (!start || !end || end <= start) {
+    await setFlash("Pick a start date before the end date.", "warn");
+    return;
+  }
   const name =
     String(formData.get("name") ?? "").trim().slice(0, 60) ||
     periodNameFor(start);
@@ -207,12 +220,21 @@ export async function createPeriod(formData: FormData): Promise<void> {
 export async function deletePeriod(formData: FormData): Promise<void> {
   const user = await requireUser();
   const id = Number(formData.get("id"));
-  if (!id) return;
+  if (!id) {
+    await setFlash("Couldn't delete that period — try again.", "warn");
+    return;
+  }
   const db = getDb();
   const all = getPeriods(user.id);
-  if (all.length <= 1) return; // never delete the last period
+  if (all.length <= 1) {
+    await setFlash("You can't delete your only period.", "warn");
+    return;
+  } // never delete the last period
   const target = all.find((p) => p.id === id);
-  if (!target) return;
+  if (!target) {
+    await setFlash("That period isn't yours to delete.", "warn");
+    return;
+  }
 
   const settings = getSettings(user.id);
   const wasActive = settings?.active_period_id === id;

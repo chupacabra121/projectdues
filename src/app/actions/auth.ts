@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { getDb, getSettings, UserRow } from "@/lib/db";
 import { createSession, destroySession } from "@/lib/auth";
+import { clientIp, rateLimit } from "@/lib/rateLimit";
 
 export interface AuthState {
   error?: string;
@@ -29,10 +30,16 @@ function echo(formData: FormData): Record<string, string> {
   return out;
 }
 
+/** Generic, account-existence-neutral throttle message. */
+const THROTTLED = "Too many attempts — wait a minute and try again.";
+
 export async function signup(
   _prev: AuthState,
   formData: FormData
 ): Promise<AuthState> {
+  const ip = await clientIp();
+  if (!rateLimit(`signup:${ip}`, 10, 60_000)) return { error: THROTTLED };
+
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const chapterName = String(formData.get("chapter_name") ?? "").trim();
@@ -77,6 +84,10 @@ export async function login(
   _prev: AuthState,
   formData: FormData
 ): Promise<AuthState> {
+  const ip = await clientIp();
+  // Check the throttle BEFORE the bcrypt compare so a flood can't burn CPU.
+  if (!rateLimit(`login:${ip}`, 10, 60_000)) return { error: THROTTLED };
+
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
 

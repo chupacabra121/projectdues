@@ -29,6 +29,24 @@ function sessionSecret(): Uint8Array {
 }
 const COOKIE_NAME = "simpledues_session";
 
+// Resolved lazily (on first auth request) so `next build`'s page-data
+// collection — which imports this module but never signs a token — doesn't trip
+// the guard. At request time in production we refuse to run with the public dev
+// secret, since anyone could then forge a session for any userId.
+let cachedSecret: Uint8Array | null = null;
+function getSecret(): Uint8Array {
+  if (cachedSecret) return cachedSecret;
+  if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+    throw new Error(
+      "SESSION_SECRET must be set in production. Generate one with: openssl rand -hex 32"
+    );
+  }
+  cachedSecret = new TextEncoder().encode(
+    process.env.SESSION_SECRET ?? "simpledues-dev-secret-change-in-production"
+  );
+  return cachedSecret;
+}
+
 export async function createSession(userId: number): Promise<void> {
   const token = await new SignJWT({ sub: String(userId) })
     .setProtectedHeader({ alg: "HS256" })
