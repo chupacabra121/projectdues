@@ -7,6 +7,13 @@ import {
   occurrences,
   itemSemesterCost,
   buildForecast,
+  brotherCollectionRate,
+  pledgeCollectionRate,
+  grossDuesBilled,
+  blendedCollectionRate,
+  breakEvenCollectionRate,
+  remainingAtRates,
+  breakdownTotal,
   ForecastSettings,
   ForecastItem,
 } from "./forecast";
@@ -128,5 +135,159 @@ describe("buildForecast", () => {
     const downside = fc.insights.find((i) => /conservative estimate/.test(i.text));
     expect(downside).toBeDefined();
     expect(downside!.text).toContain("$200"); // quotes the same deficit as the card
+  });
+});
+
+describe("per-tier collection rates", () => {
+  // Fall 2026: 21 brothers at $1,380 + 2 on $600 aid + 10 new members at $1,380,
+  // collected at Spring's actual rates (brothers 11/15, pledges 6/14).
+  const fall = () =>
+    settings({
+      active_dues_breakdown: {
+        fullCount: 21,
+        fullRate: 1380,
+        aid: [
+          { name: "Ahmed", amount: 600 },
+          { name: "Benedek", amount: 600 },
+        ],
+      },
+      active_members: 23,
+      pledge_dues: 1380,
+      pledges_expected: 10,
+      collection_rate: 0.5, // deliberately wrong — the tier rates must win
+      brother_collection_rate: 11 / 15,
+      pledge_collection_rate: 6 / 14,
+    });
+
+  it("falls back to the blended rate when neither tier rate is set", () => {
+    const s = settings({ collection_rate: 0.8 });
+    expect(brotherCollectionRate(s)).toBe(0.8);
+    expect(pledgeCollectionRate(s)).toBe(0.8);
+  });
+
+  it("a tier rate of 0 is honoured, not treated as missing", () => {
+    const s = settings({ collection_rate: 0.9, pledge_collection_rate: 0 });
+    expect(pledgeCollectionRate(s)).toBe(0);
+    expect(brotherCollectionRate(s)).toBe(0.9);
+  });
+
+  it("clamps rates outside 0..1", () => {
+    expect(brotherCollectionRate(settings({ collection_rate: 1.4 }))).toBe(1);
+    expect(pledgeCollectionRate(settings({ collection_rate: -0.2 }))).toBe(0);
+  });
+
+  it("bills each tier at its own rate", () => {
+    const s = fall();
+    expect(grossDuesBilled(s, 10)).toBe(43980); // 21×1380 + 1200 + 10×1380
+    // brothers 30,180 × 11/15 = 22,132 · pledges 13,800 × 6/14 = 5,914.29
+    expect(revenueFor(s, 10)).toBeCloseTo(28046.29, 2);
+  });
+
+  it("blended rate is an output of the tier mix", () => {
+    expect(blendedCollectionRate(fall(), 10)).toBeCloseTo(28046.29 / 43980, 6);
+  });
+
+  it("break-even is the rate that leaves exactly zero", () => {
+    const s = { ...fall(), reserve_target: 1000 };
+    const items = [
+      item({ type: "fixed_expense", amount: 17687.5 }),
+      item({ type: "planned_event", amount: 16989.97 }),
+      item({ type: "other_income", amount: 1000 }),
+    ];
+    const be = breakEvenCollectionRate(s, items, 10);
+    expect(be).toBeCloseTo((17687.5 + 16989.97 + 1000 - 1000) / 43980, 6);
+
+    // Applying that rate to both tiers must land the semester on zero.
+    const atBreakEven = { ...s, brother_collection_rate: be, pledge_collection_rate: be };
+    const f = buildForecast(atBreakEven, items);
+    expect(f.remainingBalance - s.reserve_target).toBeCloseTo(0, 6);
+  });
+
+  it("remainingAtRates holds costs constant and varies only collection", () => {
+    const s = fall();
+    const items = [
+      item({ type: "fixed_expense", amount: 17687.5 }),
+      item({ type: "planned_event", amount: 16989.97 }),
+      item({ type: "other_income", amount: 1000 }),
+    ];
+    // Full collection: everything billed arrives.
+    expect(remainingAtRates(s, items, 1, 1)).toBeCloseTo(
+      43980 + 1000 - 17687.5 - 16989.97,
+      2
+    );
+    // Nobody pays: only the other income is left against the same costs.
+    expect(remainingAtRates(s, items, 0, 0)).toBeCloseTo(
+      1000 - 17687.5 - 16989.97,
+      2
+    );
+    // At the period's own rates it agrees with the full forecast.
+    expect(remainingAtRates(s, items, 11 / 15, 6 / 14)).toBeCloseTo(
+      buildForecast(s, items).remainingBalance,
+      6
+    );
+  });
+
+  it("buildForecast surfaces gross, blended and break-even", () => {
+    const f = buildForecast(fall(), []);
+    expect(f.grossDuesBilled).toBe(43980);
+    expect(f.blendedCollectionRate).toBeCloseTo(0.637706, 5);
+    expect(f.breakEvenRate).toBe(0); // no costs, no reserve
+  });
+});
+
+describe("supporting schedules", () => {
+  it("sums quantity x rate lines", () => {
+    expect(
+      breakdownTotal([
+        { label: "bays", qty: 8, rate: 85 },
+        { label: "food", qty: 40, rate: 35 },
+      ])
+    ).toBe(2080);
+  });
+
+  it("applies a percentage line to the quantity subtotal above it", () => {
+    // Josh's rush golf event: 8 x $85 + 40 x $35, then a 25% service charge.
+    expect(
+      breakdownTotal([
+        { label: "bays", qty: 8, rate: 85 },
+        { label: "food", qty: 40, rate: 35 },
+        { label: "service charge", pct: 0.25 },
+      ])
+    ).toBe(2600);
+  });
+
+  it("percentage lines compound on the quantity subtotal, not on each other", () => {
+    const t = breakdownTotal([
+      { label: "base", qty: 1, rate: 100 },
+      { label: "service", pct: 0.2 },
+      { label: "tax", pct: 0.1 },
+    ]);
+    expect(t).toBe(130); // 100 + 20 + 10, not 100 + 20 + 12
+  });
+
+  it("a percentage line before any quantity line contributes nothing", () => {
+    expect(breakdownTotal([{ label: "tax", pct: 0.25 }])).toBe(0);
+  });
+
+  it("treats missing and empty schedules as zero", () => {
+    expect(breakdownTotal(null)).toBe(0);
+    expect(breakdownTotal([])).toBe(0);
+  });
+
+  it("rounds to cents", () => {
+    expect(breakdownTotal([{ label: "soda", qty: 2, rate: 21.29 }])).toBe(42.58);
+  });
+
+  it("reproduces the full rush schedule", () => {
+    expect(
+      breakdownTotal([
+        { label: "Golf bays", qty: 8, rate: 85 },
+        { label: "Food & drinks", qty: 40, rate: 35 },
+        { label: "Service charge", pct: 0.25 },
+        { label: "Wings", qty: 1, rate: 75.6 },
+        { label: "Soda", qty: 2, rate: 21.29 },
+        { label: "Chips", qty: 1, rate: 21.79 },
+      ])
+    ).toBe(2739.97);
   });
 });

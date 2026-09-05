@@ -1,7 +1,12 @@
 import Database from "better-sqlite3";
 import fs from "fs";
 import path from "path";
-import { ActiveDuesBreakdown, ScheduledPayment, TierBreakdown } from "./forecast";
+import {
+  ActiveDuesBreakdown,
+  ScheduledPayment,
+  ScheduleLine,
+  TierBreakdown,
+} from "./forecast";
 import { MemberStatus } from "./memberStatus";
 import { CollectionStage, ContactChannel } from "./collectionStages";
 import {
@@ -21,7 +26,8 @@ import {
 // persistent volume in production (e.g. /data/simpledues.db on Railway) so a
 // redeploy can't wipe it. Defaults to ./data for local development.
 const DB_PATH =
-  process.env.DATABASE_PATH ?? path.join(process.cwd(), "data", "simpledues.db");
+  process.env.DATABASE_PATH ??
+  path.join(/*turbopackIgnore: true*/ process.cwd(), "data", "simpledues.db");
 const DATA_DIR = path.dirname(DB_PATH);
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -165,6 +171,21 @@ function createDb(): Database.Database {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_periods_user ON periods(user_id);
+
+    CREATE TABLE IF NOT EXISTS collection_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL REFERENCES users(id),
+      period_id INTEGER NOT NULL REFERENCES periods(id),
+      member_id INTEGER NOT NULL REFERENCES members(id),
+      channel TEXT NOT NULL CHECK (channel IN ('email', 'sms', 'manual')),
+      stage TEXT NOT NULL DEFAULT 'reminder_sent' CHECK (stage IN ('not_contacted', 'reminder_sent', 'follow_up', 'overdue', 'payment_plan', 'paid')),
+      event_status TEXT NOT NULL DEFAULT 'logged' CHECK (event_status IN ('drafted', 'copied', 'logged', 'sent')),
+      subject TEXT NOT NULL DEFAULT '',
+      body TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_collection_events_period ON collection_events(user_id, period_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_collection_events_member ON collection_events(member_id, created_at);
   `);
   migrateBudgetItemTypes(db);
   migrateMemberStatuses(db);
@@ -173,6 +194,8 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "budget_items", "cost_basis", "TEXT");
   addColumnIfMissing(db, "budget_items", "paid", "INTEGER NOT NULL DEFAULT 0");
   addColumnIfMissing(db, "budget_items", "schedule", "TEXT");
+  // Supporting schedule (units x rate build-up) behind an item's amount.
+  addColumnIfMissing(db, "budget_items", "breakdown", "TEXT");
   addColumnIfMissing(db, "users", "first_name", "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing(db, "users", "last_name", "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing(db, "users", "phone", "TEXT NOT NULL DEFAULT ''");
@@ -195,6 +218,13 @@ function createDb(): Database.Database {
   addColumnIfMissing(db, "periods", "active_dues_breakdown", "TEXT");
   addColumnIfMissing(db, "periods", "dues_plans", "TEXT");
   addColumnIfMissing(db, "periods", "collection_payment_instructions", "TEXT NOT NULL DEFAULT ''");
+  // Per-tier collection rates. Nullable on purpose: NULL means "not split yet",
+  // and every reader falls back to the blended collection_rate, so periods
+  // created before the split keep forecasting exactly as they did.
+  addColumnIfMissing(db, "periods", "brother_collection_rate", "REAL");
+  addColumnIfMissing(db, "periods", "pledge_collection_rate", "REAL");
+  addColumnIfMissing(db, "settings", "brother_collection_rate", "REAL");
+  addColumnIfMissing(db, "settings", "pledge_collection_rate", "REAL");
   migrateToPeriods(db);
   return db;
 }
@@ -242,6 +272,33 @@ export function parseDuesPlans(raw: unknown): DuesPlan[] {
  * cost lands the stored total changes and the split is intentionally dropped,
  * so the curve uses the actual on the single date instead.
  */
+/**
+ * Parse an item's supporting schedule. Unlike `parseSchedule` this never has to
+ * reconcile against a stored total — the total is DERIVED from these lines — so
+ * a partially-filled row is kept rather than discarding the whole build-up.
+ */
+export function parseBreakdown(raw: unknown): ScheduleLine[] | null {
+  if (typeof raw !== "string" || !raw) return null;
+  try {
+    const p = JSON.parse(raw);
+    if (!Array.isArray(p) || p.length === 0) return null;
+    const lines = p.slice(0, 40).map((r: Record<string, unknown>) => {
+      const label = String(r?.label ?? "").slice(0, 80);
+      if (r?.pct != null) {
+        return { label, pct: Math.min(10, Math.max(0, Number(r.pct) || 0)) };
+      }
+      return {
+        label,
+        qty: Math.max(0, Number(r?.qty) || 0),
+        rate: Math.max(0, Number(r?.rate) || 0),
+      };
+    });
+    return lines.length ? lines : null;
+  } catch {
+    return null;
+  }
+}
+
 export function parseSchedule(
   raw: unknown,
   totalAmount: number
@@ -727,6 +784,9 @@ export interface PeriodRow {
   active_dues: number;
   pledge_dues: number;
   collection_rate: number;
+  /** Per-tier collection rates; NULL falls back to collection_rate. */
+  brother_collection_rate: number | null;
+  pledge_collection_rate: number | null;
   starting_balance: number;
   dues_collected: number;
   reserve_target: number;
@@ -760,6 +820,8 @@ export interface BudgetItemRow {
   paid: number;
   /** Deposit + balance split for a lumpy outflow; null = single payment on `date`. */
   schedule: ScheduledPayment[] | null;
+  /** Units x rate build-up behind `amount`; null = a plain typed-in figure. */
+  breakdown: ScheduleLine[] | null;
 }
 
 /** Default semester window based on today's date (fall: Aug–Dec, spring: Jan–May). */
@@ -800,6 +862,20 @@ export interface MemberRow {
   tags: string[];
 }
 
+export interface CollectionEventRow {
+  id: number;
+  user_id: number;
+  period_id: number;
+  member_id: number;
+  member_name: string;
+  channel: ContactChannel;
+  stage: CollectionStage;
+  event_status: "drafted" | "copied" | "logged" | "sent";
+  subject: string;
+  body: string;
+  created_at: string;
+}
+
 export function getMembers(userId: number, periodId: number): MemberRow[] {
   const rows = getDb()
     .prepare(
@@ -810,6 +886,23 @@ export function getMembers(userId: number, periodId: number): MemberRow[] {
     ...(r as unknown as MemberRow),
     tags: parseMemberTags(r.tags),
   }));
+}
+
+export function getCollectionEvents(
+  userId: number,
+  periodId: number,
+  limit = 12
+): CollectionEventRow[] {
+  return getDb()
+    .prepare(
+      `SELECT e.*, m.name AS member_name
+       FROM collection_events e
+       JOIN members m ON m.id = e.member_id
+       WHERE e.user_id = ? AND e.period_id = ?
+       ORDER BY e.created_at DESC, e.id DESC
+       LIMIT ?`
+    )
+    .all(userId, periodId, Math.max(1, Math.min(50, limit))) as CollectionEventRow[];
 }
 
 /**
@@ -972,8 +1065,13 @@ export function getBudgetItems(userId: number, periodId: number): BudgetItemRow[
     .prepare(
       "SELECT * FROM budget_items WHERE user_id = ? AND period_id = ? ORDER BY date IS NULL, date ASC, id ASC"
     )
-    .all(userId, periodId) as (Omit<BudgetItemRow, "schedule"> & {
+    .all(userId, periodId) as (Omit<BudgetItemRow, "schedule" | "breakdown"> & {
     schedule: unknown;
+    breakdown: unknown;
   })[];
-  return rows.map((r) => ({ ...r, schedule: parseSchedule(r.schedule, r.amount) }));
+  return rows.map((r) => ({
+    ...r,
+    schedule: parseSchedule(r.schedule, r.amount),
+    breakdown: parseBreakdown(r.breakdown),
+  }));
 }

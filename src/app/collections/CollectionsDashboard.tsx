@@ -15,7 +15,7 @@ import {
   setMemberCollectionStage,
   setMembersCollectionStage,
 } from "@/app/actions/collections";
-import type { MemberRow, PeriodRow } from "@/lib/db";
+import type { CollectionEventRow, MemberRow, PeriodRow } from "@/lib/db";
 import { fmtUSD } from "@/lib/forecast";
 import { memberEffectiveDues, memberSetRate, isBillableMember } from "@/lib/memberDues";
 import {
@@ -42,9 +42,11 @@ const stageTone: Record<CollectionStage, string> = {
 };
 
 export default function CollectionsDashboard({
+  events,
   members,
   period,
 }: {
+  events: CollectionEventRow[];
   members: MemberRow[];
   period: PeriodRow;
 }) {
@@ -72,14 +74,6 @@ export default function CollectionsDashboard({
     ...stage,
     count: billable.filter((member) => member.effectiveStage === stage.value).length,
   }));
-  const lastContacted = contacted
-    .slice()
-    .sort(
-      (a, b) =>
-        Date.parse(toIso(b.last_contacted_at)) -
-        Date.parse(toIso(a.last_contacted_at))
-    )
-    .slice(0, 5);
 
   function changeStage(memberId: number, stage: CollectionStage) {
     const fd = new FormData();
@@ -354,20 +348,21 @@ export default function CollectionsDashboard({
               </div>
               <Clock3 className="h-5 w-5 text-muted-foreground" />
             </div>
-            {lastContacted.length === 0 ? (
+            {events.length === 0 ? (
               <p className="text-sm text-muted-foreground/70">
                 No contacts logged yet.
               </p>
             ) : (
               <div className="space-y-3">
-                {lastContacted.map((member) => (
-                  <div key={member.id} className="rounded-xl bg-muted/60 p-3">
+                {events.slice(0, 6).map((event) => (
+                  <div key={event.id} className="rounded-xl bg-muted/60 p-3">
                     <p className="truncate text-sm font-semibold text-foreground">
-                      {member.name}
+                      {event.member_name}
                     </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {formatDateTime(member.last_contacted_at)} ·{" "}
-                      {channelLabel(member.last_contact_channel)}
+                      {formatDateTime(event.created_at)} ·{" "}
+                      {channelLabel(event.channel)} ·{" "}
+                      {collectionStageLabel(event.stage)}
                     </p>
                   </div>
                 ))}

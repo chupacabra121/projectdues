@@ -18,5 +18,9 @@ jobs:
       - run: npm ci
       - name: Lint
         run: npm run lint
+      - name: Typecheck
+        run: npx tsc --noEmit
       - name: Unit tests (money engine)
         run: npm run test
+      - name: Production build
+        run: npm run build

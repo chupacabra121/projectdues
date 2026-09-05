@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { requireOnboardedUser } from "@/lib/auth";
-import { getActivePeriod, getMembers } from "@/lib/db";
+import { getActivePeriod, getCollectionEvents, getMembers } from "@/lib/db";
 import CollectionsDashboard from "./CollectionsDashboard";
 
 export default async function DuesCollectionCollectionsPage() {
@@ -9,6 +9,7 @@ export default async function DuesCollectionCollectionsPage() {
   const period = getActivePeriod(user.id);
   if (!period) redirect("/periods");
   const members = getMembers(user.id, period.id);
+  const events = getCollectionEvents(user.id, period.id);
 
   return (
     <AppShell chapterName={user.chapter_name} userId={user.id}>
@@ -21,7 +22,7 @@ export default async function DuesCollectionCollectionsPage() {
           Track collection stages, contact history, and accounts that need the
           next nudge.
         </p>
-        <CollectionsDashboard members={members} period={period} />
+        <CollectionsDashboard members={members} period={period} events={events} />
       </div>
     </AppShell>
   );

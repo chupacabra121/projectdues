@@ -25,6 +25,7 @@ import {
 import { inputCls, labelCls } from "@/components/AuthShell";
 import DatePicker from "@/components/DatePicker";
 import { useClickOutsideSave } from "@/lib/useClickOutsideSave";
+import BreakdownEditor from "./BreakdownEditor";
 
 const num = (s: string) => {
   const n = parseFloat(s);
@@ -345,6 +346,8 @@ export function ItemRow({
   settings: ForecastSettings;
 }) {
   const [editing, setEditing] = useState(false);
+  // Progressive disclosure: the figure itself opens its build-up.
+  const [showBreakdown, setShowBreakdown] = useState(false);
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const n = occurrences(item, settings);
@@ -396,7 +399,8 @@ export function ItemRow({
     : 0;
 
   return (
-    <div className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
+    <div>
+      <div className="group flex items-center justify-between gap-3 rounded-2xl border border-border/60 px-4 py-3 transition-colors hover:border-border hover:bg-muted/30">
       <button
         onClick={() => setEditing(true)}
         className="min-w-0 flex-1 cursor-pointer text-left"
@@ -430,14 +434,32 @@ export function ItemRow({
         </p>
       </button>
       <div className="flex shrink-0 items-center gap-3">
-        <div className="text-right">
-          <p className="font-money text-sm font-semibold text-foreground">
+        <button
+          type="button"
+          onClick={() => setShowBreakdown((v) => !v)}
+          className="cursor-pointer text-right"
+          title={
+            item.breakdown
+              ? "Show what this figure is made of"
+              : "Break this figure into units × rate"
+          }
+        >
+          <p
+            className={`font-money text-sm font-semibold text-foreground ${
+              item.breakdown ? "underline decoration-dotted underline-offset-4" : ""
+            }`}
+          >
             {fmtUSD(itemSemesterCost(item, settings))}
           </p>
           {n > 1 && (
             <p className="font-money text-xs text-muted-foreground">{fmtUSD(item.amount)}/mo</p>
           )}
-        </div>
+          {item.breakdown && (
+            <p className="text-[0.65rem] text-muted-foreground">
+              {item.breakdown.length} line{item.breakdown.length === 1 ? "" : "s"}
+            </p>
+          )}
+        </button>
         <button
           onClick={() => setEditing(true)}
           className="text-muted-foreground/40 opacity-0 transition-all hover:text-primary group-hover:opacity-100"
@@ -447,6 +469,15 @@ export function ItemRow({
         </button>
         <DeleteButton id={item.id} />
       </div>
+      </div>
+      {showBreakdown && (
+        <BreakdownEditor
+          itemId={item.id}
+          initial={item.breakdown}
+          fallbackAmount={item.amount}
+          onClose={() => setShowBreakdown(false)}
+        />
+      )}
     </div>
   );
 }

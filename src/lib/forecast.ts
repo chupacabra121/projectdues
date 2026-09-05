@@ -44,7 +44,15 @@ export interface ForecastSettings {
   pledges_optimistic: number;
   active_dues: number;
   pledge_dues: number;
-  collection_rate: number; // 0..1
+  collection_rate: number; // 0..1 — legacy/blended; the fallback for both tiers
+  /**
+   * Per-tier collection rates (0..1). Brothers and new members pay at very
+   * different rates in practice, so the budget bills them separately. Null on
+   * either field falls back to `collection_rate`, which keeps every period
+   * created before the split working unchanged.
+   */
+  brother_collection_rate?: number | null;
+  pledge_collection_rate?: number | null;
   starting_balance: number;
   dues_collected: number;
   reserve_target: number;
@@ -96,6 +104,56 @@ export function customTiersRevenue(s: ForecastSettings): number {
   );
 }
 
+/**
+ * Projected end balance if the two tiers collected at the given rates,
+ * everything else held constant. The engine behind the collection sensitivity
+ * grid — costs don't move, only how much of what was billed shows up.
+ */
+export function remainingAtRates(
+  s: ForecastSettings,
+  items: ForecastItem[],
+  brotherRate: number,
+  pledgeRate: number,
+  pledgeCount: number = s.pledges_expected
+): number {
+  const at: ForecastSettings = {
+    ...s,
+    brother_collection_rate: brotherRate,
+    pledge_collection_rate: pledgeRate,
+  };
+  const costs =
+    totalFor(items, "fixed_expense", s) +
+    variableObligationsFor(items, s, pledgeCount) +
+    totalFor(items, "planned_event", s);
+  return (
+    s.starting_balance +
+    revenueFor(at, pledgeCount) +
+    totalFor(items, "other_income", s) -
+    costs
+  );
+}
+
+/**
+ * The blended collection rate at which the semester exactly breaks even —
+ * every cost covered, reserve intact, nothing left over. Compare it against
+ * `blendedCollectionRate` to see how big the gap is.
+ */
+export function breakEvenCollectionRate(
+  s: ForecastSettings,
+  items: ForecastItem[],
+  pledgeCount: number = s.pledges_expected
+): number {
+  const gross = grossDuesBilled(s, pledgeCount);
+  if (gross === 0) return 0;
+  const costs =
+    totalFor(items, "fixed_expense", s) +
+    variableObligationsFor(items, s, pledgeCount) +
+    totalFor(items, "planned_event", s) +
+    s.reserve_target;
+  const offsets = totalFor(items, "other_income", s) + s.starting_balance;
+  return (costs - offsets) / gross;
+}
+
 /** One dated payment toward a lumpy outflow (e.g. an event deposit, then the
  *  balance). The amounts sum to the item's planned amount. */
 export interface ScheduledPayment {
@@ -122,6 +180,56 @@ export interface ForecastItem {
    * reconcile) — the curve falls back to a single hit on `date`.
    */
   schedule?: ScheduledPayment[] | null;
+  /**
+   * Supporting schedule behind `amount`. When present, `amount` is DERIVED from
+   * it on every save — the build-up is the source of truth, the stored amount
+   * is the cached total every other reader already understands.
+   */
+  breakdown?: ScheduleLine[] | null;
+}
+
+/**
+ * One line of a budget item's supporting schedule — the build-up behind a
+ * single figure, so "$2,740 rush" can be audited as bays, food and a service
+ * charge rather than taken on trust.
+ *
+ * Two shapes: a quantity x rate line, or a percentage line (a service charge,
+ * gratuity or tax) applied to the subtotal of the quantity lines ABOVE it.
+ */
+export interface ScheduleLine {
+  label: string;
+  qty?: number;
+  rate?: number;
+  /** 0..1. Presence of this field makes it a percentage line. */
+  pct?: number;
+}
+
+/** Whether a line is a percentage-of-subtotal line rather than qty x rate. */
+export function isPctLine(l: ScheduleLine): boolean {
+  return l.pct != null;
+}
+
+/** One line's own dollar value, given the running qty x rate subtotal above it. */
+export function scheduleLineValue(l: ScheduleLine, baseAbove: number): number {
+  if (isPctLine(l)) return baseAbove * (Number(l.pct) || 0);
+  return (Number(l.qty) || 0) * (Number(l.rate) || 0);
+}
+
+/**
+ * What a supporting schedule adds up to. Percentage lines compound onto the
+ * quantity subtotal preceding them, never onto each other, which is how a
+ * venue actually bills a service charge.
+ */
+export function breakdownTotal(lines: ScheduleLine[] | null | undefined): number {
+  if (!lines || lines.length === 0) return 0;
+  let base = 0;
+  let total = 0;
+  for (const l of lines) {
+    const v = scheduleLineValue(l, base);
+    if (!isPctLine(l)) base += v;
+    total += v;
+  }
+  return Math.round(total * 100) / 100;
 }
 
 /** Per-person bases a variable cost can scale on. */
@@ -192,6 +300,12 @@ export interface Forecast {
   plannedEvents: number;
   remainingBalance: number;
   totalCommitted: number;
+  /** Everything billed before collection — the denominator for both rates below. */
+  grossDuesBilled: number;
+  /** What the tier mix actually works out to (output, not input). */
+  blendedCollectionRate: number;
+  /** The blended rate needed to end the semester at exactly zero. */
+  breakEvenRate: number;
   scenarios: ScenarioForecast[];
   insights: Insight[];
 }
@@ -201,14 +315,47 @@ export interface Insight {
   text: string;
 }
 
-export function revenueFor(s: ForecastSettings, pledgeCount: number): number {
-  // Actives + pledges share the overall collection rate; each custom tier is
-  // billed at its own rate and added on top (tiers are a fixed roster, so they
-  // don't swing with the pledge-class size).
+function clamp01(n: number): number {
+  return Math.min(1, Math.max(0, Number(n) || 0));
+}
+
+/** Share of billed brother dues that actually arrives. */
+export function brotherCollectionRate(s: ForecastSettings): number {
+  return clamp01(s.brother_collection_rate ?? s.collection_rate);
+}
+
+/** Share of billed new-member dues that actually arrives. */
+export function pledgeCollectionRate(s: ForecastSettings): number {
+  return clamp01(s.pledge_collection_rate ?? s.collection_rate);
+}
+
+/** Everything billed before any collection rate is applied. */
+export function grossDuesBilled(s: ForecastSettings, pledgeCount: number): number {
   return (
-    (activeDuesGross(s) + pledgeCount * s.pledge_dues) * s.collection_rate +
+    activeDuesGross(s) +
+    pledgeCount * s.pledge_dues +
+    (s.custom_tier_breakdowns ?? []).reduce((sum, t) => sum + tierGross(t), 0)
+  );
+}
+
+export function revenueFor(s: ForecastSettings, pledgeCount: number): number {
+  // Each tier collects at its own rate: brothers and new members behave
+  // differently enough that one blended rate hides the problem. Custom tiers
+  // are a fixed roster, so they don't swing with the pledge-class size.
+  return (
+    activeDuesGross(s) * brotherCollectionRate(s) +
+    pledgeCount * s.pledge_dues * pledgeCollectionRate(s) +
     customTiersRevenue(s)
   );
+}
+
+/**
+ * The single rate the tier mix works out to — an OUTPUT, never an input.
+ * Shown so the treasurer can compare against a prior semester's headline rate.
+ */
+export function blendedCollectionRate(s: ForecastSettings, pledgeCount: number): number {
+  const gross = grossDuesBilled(s, pledgeCount);
+  return gross === 0 ? 0 : revenueFor(s, pledgeCount) / gross;
 }
 
 /**
@@ -307,6 +454,9 @@ export function buildForecast(
     plannedEvents,
     remainingBalance,
     totalCommitted,
+    grossDuesBilled: grossDuesBilled(s, s.pledges_expected),
+    blendedCollectionRate: blendedCollectionRate(s, s.pledges_expected),
+    breakEvenRate: breakEvenCollectionRate(s, items, s.pledges_expected),
     scenarios,
     insights: buildInsights(
       s,
@@ -348,7 +498,7 @@ function buildInsights(
       tone: "bad",
       text: `Current plans exceed projected funds by ${fmtUSD(deficit)}.`,
     });
-    const perPledge = s.pledge_dues * s.collection_rate;
+    const perPledge = s.pledge_dues * pledgeCollectionRate(s);
     if (perPledge > 0) {
       const needed = Math.ceil(deficit / perPledge);
       insights.push({
