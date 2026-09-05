@@ -53,6 +53,21 @@ function placeholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
+function insertContactEvent(
+  db: ReturnType<typeof getDb>,
+  userId: number,
+  periodId: number,
+  memberId: number,
+  channel: ContactChannel,
+  stage: CollectionStage
+) {
+  db.prepare(
+    `INSERT INTO collection_events (
+       user_id, period_id, member_id, channel, stage, event_status
+     ) VALUES (?, ?, ?, ?, ?, 'logged')`
+  ).run(userId, periodId, memberId, channel, stage);
+}
+
 export async function setPaymentInstructions(formData: FormData): Promise<void> {
   const user = await requireUser();
   const period = getActivePeriod(user.id);
@@ -122,9 +137,10 @@ export async function logMemberContact(formData: FormData): Promise<void> {
   if (!id) return;
   const channel = parseChannel(formData.get("channel"));
   const stage = parseStage(formData.get("stage") ?? "reminder_sent");
+  const db = getDb();
 
-  getDb()
-    .prepare(
+  db.transaction(() => {
+    db.prepare(
       `UPDATE members
        SET contact_count = contact_count + 1,
            last_contacted_at = datetime('now'),
@@ -136,6 +152,8 @@ export async function logMemberContact(formData: FormData): Promise<void> {
        WHERE id = ? AND user_id = ? AND period_id = ?`
     )
     .run(channel, stage, id, user.id, period.id);
+    insertContactEvent(db, user.id, period.id, id, channel, stage);
+  })();
 
   revalidateCollectionPaths();
 }
@@ -148,9 +166,10 @@ export async function logMembersContact(formData: FormData): Promise<void> {
   if (ids.length === 0) return;
   const channel = parseChannel(formData.get("channel"));
   const stage = parseStage(formData.get("stage") ?? "reminder_sent");
+  const db = getDb();
 
-  getDb()
-    .prepare(
+  db.transaction(() => {
+    db.prepare(
       `UPDATE members
        SET contact_count = contact_count + 1,
            last_contacted_at = datetime('now'),
@@ -162,6 +181,10 @@ export async function logMembersContact(formData: FormData): Promise<void> {
        WHERE user_id = ? AND period_id = ? AND id IN (${placeholders(ids.length)})`
     )
     .run(channel, stage, user.id, period.id, ...ids);
+    for (const id of ids) {
+      insertContactEvent(db, user.id, period.id, id, channel, stage);
+    }
+  })();
 
   revalidateCollectionPaths();
 }

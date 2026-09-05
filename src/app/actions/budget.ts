@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getDb, getActivePeriod } from "@/lib/db";
+import { getDb, getActivePeriod, parseBreakdown } from "@/lib/db";
+import { breakdownTotal } from "@/lib/forecast";
 import { requireUser } from "@/lib/auth";
 import {
   categorizeEvent,
@@ -9,7 +10,7 @@ import {
   categorizeIncome,
 } from "@/lib/categorize";
 
-const PATHS = ["/dashboard", "/budget", "/actuals", "/scenarios", "/periods"];
+const PATHS = ["/dashboard", "/budget", "/assumptions", "/actuals", "/scenarios", "/periods"];
 const ITEM_TYPES = ["fixed_expense", "planned_event", "other_income", "variable_expense"] as const;
 type ItemType = (typeof ITEM_TYPES)[number];
 
@@ -244,6 +245,36 @@ export async function setBillPaid(formData: FormData): Promise<void> {
   getDb()
     .prepare("UPDATE budget_items SET paid = ? WHERE id = ? AND user_id = ?")
     .run(paid, id, user.id);
+  revalidateAll();
+}
+
+/**
+ * Save an item's supporting schedule and re-derive its amount from it. The
+ * build-up is the source of truth; `amount` is the cached total every other
+ * reader (forecast, cash curve, dashboard) already understands. Posting an
+ * empty schedule clears it and leaves the typed-in amount alone.
+ */
+export async function setItemBreakdown(formData: FormData): Promise<void> {
+  const user = await requireUser();
+  const id = Number(formData.get("id"));
+  if (!id) return;
+  const raw = String(formData.get("breakdown") ?? "");
+  const lines = parseBreakdown(raw);
+  const db = getDb();
+
+  if (!lines) {
+    db.prepare(
+      "UPDATE budget_items SET breakdown = NULL WHERE id = ? AND user_id = ?"
+    ).run(id, user.id);
+    revalidateAll();
+    return;
+  }
+
+  // A schedule that reprices an item also invalidates any deposit/balance split,
+  // which was reconciled against the old total.
+  db.prepare(
+    "UPDATE budget_items SET breakdown = ?, amount = ?, schedule = NULL WHERE id = ? AND user_id = ?"
+  ).run(JSON.stringify(lines), breakdownTotal(lines), id, user.id);
   revalidateAll();
 }
 

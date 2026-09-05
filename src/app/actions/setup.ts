@@ -19,7 +19,10 @@ export interface OnboardingPayload {
   pledgesOptimistic: number;
   activeDues: number;
   pledgeDues: number;
-  collectionRate: number; // percent, 0-100
+  collectionRate: number; // percent, 0-100 — the blended figure, kept for legacy readers
+  /** Per-tier rates, percent 0-100. Undefined leaves the column NULL (falls back to blended). */
+  brotherCollectionRate?: number;
+  pledgeCollectionRate?: number;
 }
 
 export interface OnboardingMember {
@@ -117,7 +120,10 @@ export interface BudgetSettingsPayload {
   /** The set active-dues rate; per-member dues/aid are derived from the roster. */
   activeDues: number;
   pledgeDues: number;
-  collectionRate: number; // percent, 0-100
+  collectionRate: number; // percent, 0-100 — the blended figure, kept for legacy readers
+  /** Per-tier rates, percent 0-100. Undefined leaves the column NULL (falls back to blended). */
+  brotherCollectionRate?: number;
+  pledgeCollectionRate?: number;
   pledgesConservative: number;
   pledgesExpected: number;
   pledgesOptimistic: number;
@@ -127,6 +133,12 @@ export interface BudgetSettingsPayload {
   semesterEnd: string;
   /** When dues arrive: sixweek | upfront | monthly | thirds (drives the cash curve). */
   duesSchedule?: string;
+}
+
+/** A 0-100 percent payload field as a 0..1 rate, or NULL when not supplied. */
+function pctOrNull(v: number | undefined): number | null {
+  if (v == null || Number.isNaN(Number(v))) return null;
+  return Math.min(100, Math.max(0, Number(v))) / 100;
 }
 
 const DUES_SCHEDULES = ["sixweek", "upfront", "monthly", "thirds"];
@@ -157,6 +169,7 @@ export async function updateBudgetSettings(
       `UPDATE periods SET
         active_dues = ?,
         pledge_dues = ?, collection_rate = ?,
+        brother_collection_rate = ?, pledge_collection_rate = ?,
         pledges_conservative = ?, pledges_expected = ?, pledges_optimistic = ?,
         starting_balance = ?, reserve_target = ?,
         semester_start = ?, semester_end = ?,
@@ -167,6 +180,8 @@ export async function updateBudgetSettings(
       clampMoney(payload.activeDues),
       clampMoney(payload.pledgeDues),
       Math.min(100, Math.max(0, Number(payload.collectionRate) || 0)) / 100,
+      pctOrNull(payload.brotherCollectionRate),
+      pctOrNull(payload.pledgeCollectionRate),
       clampInt(payload.pledgesConservative),
       clampInt(payload.pledgesExpected),
       clampInt(payload.pledgesOptimistic),
@@ -182,6 +197,7 @@ export async function updateBudgetSettings(
   recomputeDerivedDues(user.id, period.id);
   revalidatePath("/dashboard");
   revalidatePath("/budget");
+  revalidatePath("/assumptions");
   revalidatePath("/actuals");
   revalidatePath("/dues");
   revalidatePath("/scenarios");

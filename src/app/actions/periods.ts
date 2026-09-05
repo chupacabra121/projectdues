@@ -12,7 +12,7 @@ import {
 } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-const PATHS = ["/dashboard", "/budget", "/actuals", "/members", "/scenarios", "/periods"];
+const PATHS = ["/dashboard", "/budget", "/assumptions", "/actuals", "/members", "/scenarios", "/periods"];
 
 function revalidateAll() {
   for (const p of PATHS) revalidatePath(p);

@@ -41,9 +41,10 @@ export const AGENTS: AgentProfile[] = [
     description:
       "Penny watches money in and money out, keeps the semester forecast live, and answers the only question that matters: can we afford what we're planning?",
     focus: ["Semester plan", "Plan vs actual", "Member dues", "Recruitment scenarios"],
-    subtabs: ["Budget", "Dues", "Plan vs Actual", "Scenarios"],
+    subtabs: ["Budget", "Assumptions", "Dues", "Plan vs Actual", "Scenarios"],
     navTabs: [
       { href: "/budget", label: "Budget" },
+      { href: "/assumptions", label: "Assumptions" },
       { href: "/dues", label: "Dues" },
       { href: "/actuals", label: "Plan vs Actual" },
       { href: "/scenarios", label: "Scenarios" },

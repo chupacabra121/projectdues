@@ -2,8 +2,9 @@ import Link from "next/link";
 import { requireOnboardedUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { getActivePeriod, getBudgetItems } from "@/lib/db";
-import { buildForecast, fmtUSD } from "@/lib/forecast";
+import { buildForecast, fmtUSD, pledgeCollectionRate } from "@/lib/forecast";
 import AppShell from "@/components/AppShell";
+import CollectionGrid from "./CollectionGrid";
 
 export default async function ScenariosPage() {
   const user = await requireOnboardedUser();
@@ -111,12 +112,14 @@ export default async function ScenariosPage() {
           <li>
             Each pledge is worth{" "}
             <span className="font-money font-medium text-foreground">
-              {fmtUSD(period.pledge_dues * period.collection_rate)}
+              {fmtUSD(period.pledge_dues * pledgeCollectionRate(period))}
             </span>{" "}
             in expected revenue at your current collection rate.
           </li>
         </ul>
       </div>
+
+      <CollectionGrid settings={period} items={items} />
       </div>
     </AppShell>
   );

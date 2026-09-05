@@ -2,8 +2,8 @@
 
 @theme inline {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-instrument-serif), Georgia, "Times New Roman", serif;
-  --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", Menlo, monospace;
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -35,111 +35,110 @@
 }
 
 /*
- * SimpleDues — "Obsidian Glass · Daylight Edition" dual-theme system.
- * DARK is the default hero look: near-black neutral-cool surfaces, layered glass,
- * a luminous mint accent that behaves like emitted light, grain + gradient mesh,
- * and glow fenced to the single most important number. A refined cool-architectural
- * LIGHT variant lives under `.light`. Both ride the same semantic tokens, so the
- * theme toggle re-skins the entire app with zero component edits.
+ * SimpleDues — "Collegiate Editorial" dual-theme system.
+ * LIGHT (warm paper) is the default: parchment surfaces, lifted warm-white cards,
+ * warm espresso ink, a deep forest accent, terracotta negatives, ochre warnings.
+ * A warm "ink paper" DARK companion lives under `.dark`. Both ride the same
+ * semantic tokens, so the theme toggle re-skins the entire app with zero edits.
  */
 :root {
-  /* Surfaces — neutral-cool, hue ~265, never pure black */
-  --background: oklch(0.16 0.012 265);
-  --card: oklch(0.205 0.014 265);
-  --card-foreground: oklch(0.965 0.004 250);
-  --popover: oklch(0.245 0.016 265);
-  --popover-foreground: oklch(0.965 0.004 250);
-  --elevated: oklch(0.245 0.018 265);
-  --muted: oklch(0.235 0.014 265);
-  --muted-foreground: oklch(0.7 0.012 258);
-  --secondary: oklch(0.28 0.015 265);
-  --secondary-foreground: oklch(0.9 0.006 255);
+  color-scheme: light;
 
-  --foreground: oklch(0.965 0.004 250);
+  /* Surfaces — warm parchment, cards lifted lighter than the page */
+  --background: oklch(0.965 0.012 85);
+  --card: oklch(0.985 0.008 85);
+  --card-foreground: oklch(0.24 0.02 60);
+  --popover: oklch(0.99 0.006 85);
+  --popover-foreground: oklch(0.24 0.02 60);
+  --elevated: oklch(0.992 0.006 85);
+  --muted: oklch(0.94 0.012 85);
+  --muted-foreground: oklch(0.5 0.02 70);
+  --secondary: oklch(0.93 0.014 85);
+  --secondary-foreground: oklch(0.28 0.02 60);
 
-  /* Accent — luminous mint (the soul); reads as emitted light, not paint */
-  --primary: oklch(0.82 0.17 165);
-  --primary-foreground: oklch(0.18 0.03 165);
-  --accent: oklch(0.3 0.05 168);
-  --accent-foreground: oklch(0.86 0.15 165);
-  --ring: oklch(0.82 0.17 165);
+  --foreground: oklch(0.24 0.02 60);
 
-  /* Money semantics — solid tones, never glow-dependent */
-  --money-up: oklch(0.82 0.17 165);
-  --money-down: oklch(0.7 0.2 22);
-  --destructive: oklch(0.7 0.2 22);
-  --destructive-foreground: oklch(0.16 0.04 25);
-  --positive-soft: oklch(0.86 0.14 165);
-  --negative-soft: oklch(0.78 0.16 22);
+  /* Accent — deep forest green */
+  --primary: oklch(0.42 0.085 150);
+  --primary-foreground: oklch(0.97 0.02 90);
+  --accent: oklch(0.94 0.035 150);
+  --accent-foreground: oklch(0.4 0.09 150);
+  --ring: oklch(0.42 0.085 150);
 
-  /* Warning — luminous amber, for outflow bars + caution insights only */
-  --warning: oklch(0.82 0.15 80);
-  --warning-foreground: oklch(0.2 0.05 80);
+  /* Money semantics — forest up, terracotta down */
+  --money-up: oklch(0.48 0.1 150);
+  --money-down: oklch(0.52 0.16 32);
+  --destructive: oklch(0.52 0.16 32);
+  --destructive-foreground: oklch(0.98 0.01 60);
+  --positive-soft: oklch(0.92 0.04 150);
+  --negative-soft: oklch(0.92 0.045 32);
 
-  /* Custom-category chip hues (dark) — luminous, distinct, legible on glass */
-  --cat-mint: oklch(0.82 0.17 165);
-  --cat-blue: oklch(0.72 0.13 240);
-  --cat-violet: oklch(0.74 0.15 300);
-  --cat-amber: oklch(0.82 0.15 80);
-  --cat-rose: oklch(0.74 0.18 12);
-  --cat-slate: oklch(0.72 0.025 260);
+  /* Warning — ochre */
+  --warning: oklch(0.62 0.12 75);
+  --warning-foreground: oklch(0.3 0.06 75);
 
-  /* Lines */
-  --border: oklch(0.32 0.012 265);
-  --border-strong: oklch(0.42 0.014 265);
-  --input: oklch(0.34 0.013 265);
+  /* Custom-category chip hues — earthy */
+  --cat-mint: oklch(0.6 0.08 150);
+  --cat-blue: oklch(0.55 0.09 240);
+  --cat-violet: oklch(0.52 0.1 320);
+  --cat-amber: oklch(0.65 0.11 70);
+  --cat-rose: oklch(0.58 0.13 35);
+  --cat-slate: oklch(0.55 0.015 70);
 
-  /* Glow channels + grid + motion */
-  --glow-mint: var(--primary);
-  --glow-coral: var(--destructive);
-  --grid-line: oklch(1 0 0 / 0.045);
+  /* Lines — warm hairlines */
+  --border: oklch(0.89 0.012 85);
+  --border-strong: oklch(0.82 0.014 85);
+  --input: oklch(0.87 0.012 85);
+
+  --grid-line: oklch(0.4 0.02 70 / 0.05);
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* LIGHT theme — refined cool-architectural white (not the old warm cream). */
-.light {
-  --background: oklch(0.985 0.002 255);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.205 0.015 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.205 0.015 260);
-  --elevated: oklch(0.997 0.001 255);
-  --muted: oklch(0.965 0.003 255);
-  --muted-foreground: oklch(0.52 0.012 258);
-  --secondary: oklch(0.965 0.003 255);
-  --secondary-foreground: oklch(0.25 0.012 260);
+/* DARK — warm "ink paper" companion (theme toggle). */
+.dark {
+  color-scheme: dark;
 
-  --foreground: oklch(0.205 0.015 260);
+  --background: oklch(0.2 0.008 60);
+  --card: oklch(0.245 0.01 60);
+  --card-foreground: oklch(0.93 0.012 85);
+  --popover: oklch(0.26 0.012 60);
+  --popover-foreground: oklch(0.93 0.012 85);
+  --elevated: oklch(0.27 0.012 60);
+  --muted: oklch(0.26 0.01 60);
+  --muted-foreground: oklch(0.68 0.014 75);
+  --secondary: oklch(0.3 0.012 60);
+  --secondary-foreground: oklch(0.9 0.01 85);
 
-  --primary: oklch(0.585 0.135 159);
-  --primary-foreground: oklch(0.99 0.004 159);
-  --accent: oklch(0.965 0.03 162);
-  --accent-foreground: oklch(0.4 0.1 160);
-  --ring: oklch(0.585 0.135 159);
+  --foreground: oklch(0.93 0.012 85);
 
-  --money-up: oklch(0.585 0.135 159);
-  --money-down: oklch(0.555 0.205 25);
-  --destructive: oklch(0.555 0.205 25);
-  --destructive-foreground: oklch(0.99 0.004 25);
-  --positive-soft: oklch(0.585 0.135 159);
-  --negative-soft: oklch(0.555 0.205 25);
+  --primary: oklch(0.68 0.11 150);
+  --primary-foreground: oklch(0.2 0.03 150);
+  --accent: oklch(0.32 0.05 150);
+  --accent-foreground: oklch(0.8 0.12 150);
+  --ring: oklch(0.68 0.11 150);
 
-  --warning: oklch(0.72 0.11 75);
-  --warning-foreground: oklch(0.3 0.06 75);
+  --money-up: oklch(0.72 0.12 150);
+  --money-down: oklch(0.68 0.16 32);
+  --destructive: oklch(0.65 0.17 30);
+  --destructive-foreground: oklch(0.16 0.03 30);
+  --positive-soft: oklch(0.34 0.06 150);
+  --negative-soft: oklch(0.34 0.07 32);
 
-  /* Category chip hues (light) — darkened so text clears contrast on white */
-  --cat-mint: oklch(0.55 0.13 165);
-  --cat-blue: oklch(0.52 0.14 240);
-  --cat-violet: oklch(0.52 0.16 300);
-  --cat-amber: oklch(0.58 0.12 75);
-  --cat-rose: oklch(0.55 0.18 12);
-  --cat-slate: oklch(0.5 0.02 260);
+  --warning: oklch(0.78 0.13 80);
+  --warning-foreground: oklch(0.2 0.05 80);
 
-  --border: oklch(0.915 0.004 258);
-  --border-strong: oklch(0.86 0.005 258);
-  --input: oklch(0.915 0.004 258);
+  --cat-mint: oklch(0.72 0.1 150);
+  --cat-blue: oklch(0.7 0.11 240);
+  --cat-violet: oklch(0.72 0.12 320);
+  --cat-amber: oklch(0.8 0.12 70);
+  --cat-rose: oklch(0.72 0.14 35);
+  --cat-slate: oklch(0.68 0.015 70);
 
-  --grid-line: oklch(0.2 0.02 260 / 0.06);
+  --border: oklch(0.34 0.012 60);
+  --border-strong: oklch(0.42 0.014 60);
+  --input: oklch(0.34 0.013 60);
+
+  --grid-line: oklch(1 0 0 / 0.04);
 }
 
 @layer base {
@@ -161,187 +160,165 @@
   }
   .font-display {
     font-family: var(--font-display);
-    font-weight: 400;
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    letter-spacing: -0.005em;
   }
 }
 
-/* ── Background atmosphere: gradient mesh + film grain (DARK only) ───────────
-   Fixed full-screen layers behind all content (z-index -1; body/html are
-   unpositioned so this sits below every in-flow element automatically). */
-.dark body::before {
+/* ── Background atmosphere ─────────────────────────────────────────────────
+   Fixed full-screen layers behind all content (z-index -1). */
+/* Light: a faint forest + ochre warm glow up top, with a warm paper grain. */
+body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60% 50% at 15% 0%, oklch(0.82 0.17 165 / 0.06), transparent),
-    radial-gradient(50% 50% at 100% 100%, oklch(0.5 0.1 280 / 0.05), transparent);
+    radial-gradient(70% 55% at 12% -10%, oklch(0.42 0.085 150 / 0.05), transparent 60%),
+    radial-gradient(60% 55% at 100% 0%, oklch(0.62 0.12 75 / 0.04), transparent 55%);
 }
-.dark body::after {
+body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.025;
-  mix-blend-mode: soft-light;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
+/* Dark: a muted forest + plum vignette with a soft grain. */
+.dark body::before {
+  background:
+    radial-gradient(60% 50% at 12% -10%, oklch(0.68 0.11 150 / 0.06), transparent 60%),
+    radial-gradient(55% 55% at 100% 100%, oklch(0.5 0.08 300 / 0.05), transparent 60%);
+}
+.dark body::after {
+  opacity: 0.03;
+  mix-blend-mode: soft-light;
+}
 
-/* ── Tabular mono money — the fintech instrument-grade tell ──────────────── */
+/* ── Money typography ──────────────────────────────────────────────────────
+   Tabular Inter for aligned table money; Fraunces for the big hero numeral. */
 .font-money {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum", "zero";
   letter-spacing: -0.01em;
 }
-/* Large hero numerals tighten optically and lock tabular alignment harder. */
 .font-money-display {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum", "zero";
-  letter-spacing: -0.035em;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
 }
 
-/* ── Glass elevation (3 tiers). Same token names so cards need no theme class ─ */
+/* ── Paper cards (3 tiers). Opaque, hairline warm border, soft shadow — no blur. */
 .glass {
-  background: color-mix(in oklch, var(--card) 80%, transparent);
-  border: 1px solid color-mix(in oklch, white 8%, transparent);
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 10%, transparent),
-    0 0 0 1px oklch(0 0 0 / 0.4),
-    0 12px 32px -12px oklch(0 0 0 / 0.7),
-    0 2px 8px -4px oklch(0 0 0 / 0.5);
-}
-@supports (backdrop-filter: blur(1px)) {
-  .dark .glass { backdrop-filter: blur(20px) saturate(140%); }
-}
-@supports not (backdrop-filter: blur(1px)) {
-  .dark .glass { background: color-mix(in oklch, var(--card) 96%, transparent); }
-}
-.light .glass {
   background: var(--card);
-  backdrop-filter: none;
   border: 1px solid var(--border);
   box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.9),
-    0 1px 2px -1px oklch(0.2 0.02 260 / 0.06),
-    0 2px 8px -2px oklch(0.2 0.02 260 / 0.05);
+    0 1px 2px -1px oklch(0.3 0.02 60 / 0.06),
+    0 6px 20px -10px oklch(0.3 0.02 60 / 0.08);
+}
+.dark .glass {
+  background: color-mix(in oklch, var(--card) 82%, transparent);
+  border: 1px solid color-mix(in oklch, white 6%, transparent);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 6%, transparent),
+    0 12px 32px -14px oklch(0 0 0 / 0.55);
 }
 
 .glass-elevated {
-  background: color-mix(in oklch, var(--popover) 82%, transparent);
-  border: 1px solid color-mix(in oklch, white 8%, transparent);
+  background: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 2px 6px oklch(0.3 0.02 60 / 0.05),
+    0 14px 40px -10px oklch(0.3 0.02 60 / 0.12);
 }
 .dark .glass-elevated {
-  backdrop-filter: blur(28px) saturate(140%);
+  background: color-mix(in oklch, var(--popover) 84%, transparent);
+  border: 1px solid color-mix(in oklch, white 8%, transparent);
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 14%, transparent),
-    0 0 0 1px oklch(0 0 0 / 0.45),
-    0 24px 60px -16px oklch(0 0 0 / 0.8);
-}
-.light .glass-elevated {
-  background: var(--popover);
-  backdrop-filter: none;
-  border: 1px solid var(--border);
-  box-shadow:
-    0 1px 2px oklch(0.2 0.02 260 / 0.04),
-    0 8px 24px -6px oklch(0.2 0.02 260 / 0.08);
+    inset 0 1px 0 0 color-mix(in oklch, white 10%, transparent),
+    0 24px 60px -16px oklch(0 0 0 / 0.7);
 }
 
-/* Tier 3 — hero / AI cards go DARKER than the page with a mint inner rim. */
+/* Hero / AI cards — a forest top-rule that flips to terracotta under deficit. */
+.glass-hero {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 2px solid var(--primary);
+  box-shadow:
+    0 1px 2px -1px oklch(0.3 0.02 60 / 0.06),
+    0 10px 30px -12px color-mix(in oklch, var(--primary) 14%, transparent);
+}
+.glass-hero[data-deficit="true"] {
+  border-top-color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 5%, var(--card));
+  box-shadow:
+    0 1px 2px -1px oklch(0.3 0.02 60 / 0.06),
+    0 10px 30px -12px color-mix(in oklch, var(--destructive) 16%, transparent);
+}
 .dark .glass-hero {
-  background: oklch(0.13 0.012 265);
+  background: oklch(0.22 0.01 60);
   border: 1px solid transparent;
+  border-top: 2px solid var(--primary);
   box-shadow:
-    inset 0 0 0 1px color-mix(in oklch, var(--primary) 22%, transparent),
-    0 0 40px -8px color-mix(in oklch, var(--primary) 30%, transparent),
-    0 12px 32px -12px oklch(0 0 0 / 0.7);
+    inset 0 0 0 1px color-mix(in oklch, var(--primary) 18%, transparent),
+    0 12px 32px -12px oklch(0 0 0 / 0.6);
 }
-.light .glass-hero {
-  background: var(--accent);
-  border: 1px solid var(--border);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.9),
-    0 8px 24px -6px oklch(0.2 0.02 260 / 0.08);
-}
-/* Hero card flips mint -> coral the instant a balance goes underwater. */
 .dark .glass-hero[data-deficit="true"] {
+  border-top-color: var(--destructive);
   box-shadow:
-    inset 0 0 0 1px color-mix(in oklch, var(--destructive) 26%, transparent),
-    0 0 40px -8px color-mix(in oklch, var(--destructive) 32%, transparent),
-    0 12px 32px -12px oklch(0 0 0 / 0.7);
-}
-.light .glass-hero[data-deficit="true"] {
-  background: color-mix(in oklch, var(--destructive) 7%, var(--card));
+    inset 0 0 0 1px color-mix(in oklch, var(--destructive) 24%, transparent),
+    0 12px 32px -12px oklch(0 0 0 / 0.6);
 }
 
-/* ── Glow — DARK only, decoration on the hero number / active node ──────────
-   Glow is NEVER the money signal; sign + color + position carry that. */
+/* ── Glow — dark only, a quiet decoration on the hero number / active node. */
 .glow { text-shadow: none; }
 .dark .glow {
-  text-shadow:
-    0 0 16px color-mix(in oklch, currentColor 45%, transparent),
-    0 0 2px color-mix(in oklch, currentColor 60%, transparent);
+  text-shadow: 0 0 14px color-mix(in oklch, currentColor 40%, transparent);
 }
 .dark .glow-box {
   box-shadow:
-    inset 0 0 0 1px color-mix(in oklch, var(--primary) 26%, transparent),
-    0 0 48px -12px color-mix(in oklch, var(--primary) 40%, transparent),
-    0 12px 32px -12px oklch(0 0 0 / 0.7);
+    inset 0 0 0 1px color-mix(in oklch, var(--primary) 24%, transparent),
+    0 0 40px -14px color-mix(in oklch, var(--primary) 32%, transparent),
+    0 12px 32px -12px oklch(0 0 0 / 0.6);
 }
 .dark .glow-box[data-deficit="true"] {
   box-shadow:
-    inset 0 0 0 1px color-mix(in oklch, var(--destructive) 30%, transparent),
-    0 0 48px -12px color-mix(in oklch, var(--destructive) 40%, transparent),
-    0 12px 32px -12px oklch(0 0 0 / 0.7);
+    inset 0 0 0 1px color-mix(in oklch, var(--destructive) 28%, transparent),
+    0 0 40px -14px color-mix(in oklch, var(--destructive) 34%, transparent),
+    0 12px 32px -12px oklch(0 0 0 / 0.6);
 }
 
-/* ── Graph-paper substrate — 28px engineering grid, both themes. ────────────
-   The grid + its fade live on a ::before layer behind the content. The mask
-   must NEVER touch the content element itself — masking <main> would fade the
-   page (and everything in it) to transparent toward the bottom. */
+/* ── Substrate (the engineering grid is retired — warm paper carries it). ── */
 .grid-substrate {
   position: relative;
 }
-.grid-substrate::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background-image:
-    repeating-linear-gradient(0deg, transparent 0 27px, var(--grid-line) 27px 28px),
-    repeating-linear-gradient(90deg, transparent 0 27px, var(--grid-line) 27px 28px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 120px, #000 calc(100% - 160px), transparent 100%);
-          mask-image: linear-gradient(to bottom, transparent 0, #000 120px, #000 calc(100% - 160px), transparent 100%);
-}
 
 /* ── Signature flourishes ───────────────────────────────────────────────── */
-/* Opt-in hover lift for interactive glass cards (not the static ribbon). */
+/* Opt-in hover lift for interactive cards. */
 .glass-lift {
   transition: transform 220ms var(--ease), box-shadow 220ms var(--ease), border-color 220ms var(--ease);
 }
 .glass-lift:hover {
   transform: translateY(-2px);
-}
-.dark .glass-lift:hover {
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklch, white 16%, transparent),
-    0 0 0 1px oklch(0 0 0 / 0.4),
-    0 20px 44px -14px oklch(0 0 0 / 0.8),
-    0 0 26px -16px color-mix(in oklch, var(--primary) 55%, transparent);
-}
-.light .glass-lift:hover {
   border-color: var(--border-strong);
   box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.9),
-    0 10px 28px -8px oklch(0.2 0.02 260 / 0.12);
+    0 1px 2px -1px oklch(0.3 0.02 60 / 0.06),
+    0 14px 36px -10px oklch(0.3 0.02 60 / 0.14);
+}
+.dark .glass-lift:hover {
+  border-color: color-mix(in oklch, white 14%, transparent);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklch, white 12%, transparent),
+    0 20px 44px -14px oklch(0 0 0 / 0.7);
 }
 
-/* Glowing mint "spine" down the left edge of each waterfall step. */
+/* Forest "spine" down the left edge of each waterfall step. */
 .step-spine::before {
   content: "";
   position: absolute;
@@ -350,13 +327,10 @@
   bottom: 14px;
   width: 2px;
   border-radius: 0 2px 2px 0;
-  background: linear-gradient(to bottom, color-mix(in oklch, var(--primary) 55%, transparent), color-mix(in oklch, var(--primary) 12%, transparent));
-}
-.dark .step-spine::before {
-  box-shadow: 0 0 10px -1px color-mix(in oklch, var(--primary) 55%, transparent);
+  background: linear-gradient(to bottom, color-mix(in oklch, var(--primary) 60%, transparent), color-mix(in oklch, var(--primary) 15%, transparent));
 }
 
-/* A mint gradient hairline that draws under the ribbon on mount. */
+/* A forest gradient hairline that draws under the ribbon on mount. */
 @keyframes draw-underline {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
@@ -373,10 +347,10 @@
   animation: draw-underline 700ms var(--ease) both;
 }
 
-/* Theme-toggle icon: sun in dark (default), moon in light — class-driven, no JS. */
-.theme-icon-light { display: none; }
-.light .theme-icon-dark { display: none; }
-.light .theme-icon-light { display: inline-block; }
+/* Theme-toggle icon: light is default so Moon shows (→ dark); .dark shows Sun (→ light). */
+.theme-icon-dark { display: none; }
+.dark .theme-icon-light { display: none; }
+.dark .theme-icon-dark { display: inline-block; }
 
 /* Custom-category chips — one tone class sets --cat, .cat-chip paints it. */
 .cat-chip {
@@ -391,7 +365,7 @@
 .cat-rose { --cat: var(--cat-rose); }
 .cat-slate { --cat: var(--cat-slate); }
 
-/* ── Focus — mint ring + soft halo, both themes ─────────────────────────── */
+/* ── Focus — forest ring + soft halo, both themes ───────────────────────── */
 :where(input, select, textarea):focus-visible {
   outline: none;
   border-color: var(--ring);
@@ -401,28 +375,29 @@
 }
 
 /* ── Motion ─────────────────────────────────────────────────────────────── */
-@keyframes pulse-glow {
-  0%, 100% { text-shadow: 0 0 14px color-mix(in oklch, currentColor 40%, transparent), 0 0 2px color-mix(in oklch, currentColor 55%, transparent); }
-  50% { text-shadow: 0 0 22px color-mix(in oklch, currentColor 55%, transparent), 0 0 3px color-mix(in oklch, currentColor 65%, transparent); }
+/* A gentle, theme-agnostic "breathing" pulse (loading dot + live hero number). */
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.62; }
 }
+.breathe { animation: breathe 3s var(--ease) infinite; }
+
 @keyframes pulse-node {
-  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 55%, transparent), 0 0 8px color-mix(in oklch, var(--primary) 60%, transparent); }
-  50% { box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 0%, transparent), 0 0 12px color-mix(in oklch, var(--primary) 70%, transparent); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklch, var(--primary) 50%, transparent), 0 0 8px color-mix(in oklch, var(--primary) 55%, transparent); }
+  50% { box-shadow: 0 0 0 3px color-mix(in oklch, var(--primary) 0%, transparent), 0 0 12px color-mix(in oklch, var(--primary) 65%, transparent); }
 }
+.pulse-node { animation: pulse-node 2.4s var(--ease) infinite; }
+
 @keyframes draw-line {
   from { stroke-dashoffset: var(--dash, 1200); }
   to { stroke-dashoffset: 0; }
 }
-.dark .breathe { animation: pulse-glow 3s var(--ease) infinite; }
-.pulse-node { animation: pulse-node 2.4s var(--ease) infinite; }
 .transition-theme {
   transition: background-color 280ms var(--ease), color 280ms var(--ease),
     border-color 280ms var(--ease), box-shadow 280ms var(--ease);
 }
 
 /* ── View transitions — agent chip ⇄ workspace-rail portrait ──────────────── */
-/* The small chip and the large rail portrait share a name and morph between
-   each other across the route change (one continuous motion). */
 ::view-transition-group(.morph) {
   animation-duration: 380ms;
   animation-timing-function: var(--ease);
@@ -433,19 +408,14 @@
 @keyframes via-blur {
   30% { filter: blur(3px); }
 }
-/* Anchor the sticky header so the strip/brand stay put while only the
-   content morphs — prevents a double-header flash mid-transition. */
 ::view-transition-group(app-header) { animation: none; z-index: 100; }
 ::view-transition-old(app-header) { display: none; }
 ::view-transition-new(app-header) { animation: none; }
-/* The rail's identity + nav slide in gently (named, so unrelated nav skips it). */
 ::view-transition-new(.rail-in) { animation: rail-in 320ms var(--ease) both; }
 @keyframes rail-in {
   from { opacity: 0; transform: translateX(-12px); }
   to { opacity: 1; transform: none; }
 }
-/* Fallback for browsers without the View Transitions API: the morph silently
-   no-ops, so give the rail a plain slide-in on mount rather than a hard pop. */
 @supports not (view-transition-name: none) {
   .rail-enter { animation: rail-in 320ms var(--ease) both; }
 }

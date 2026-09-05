@@ -12,6 +12,8 @@ import {
   fmtDate,
   itemSemesterCost,
   tierGross,
+  brotherCollectionRate,
+  pledgeCollectionRate,
 } from "@/lib/forecast";
 import { buildCashCurve } from "@/lib/cashflow";
 import { AddItemForm, ItemRow } from "./ItemForms";
@@ -20,7 +22,8 @@ import { inputCls } from "@/components/AuthShell";
 interface MoneyInState {
   fullRate: string;
   pledgeDues: string;
-  nonPayers: string;
+  brotherNonPayers: string;
+  pledgeNonPayers: string;
   conservative: string;
   expected: string;
   optimistic: string;
@@ -54,12 +57,23 @@ export default function Workbench({
   const [s, setS] = useState<MoneyInState>({
     fullRate: String(bd ? bd.fullRate : settings.active_dues),
     pledgeDues: String(settings.pledge_dues),
-    nonPayers: String(
+    // Each tier's rate is expressed as a headcount that won't pay — easier to
+    // estimate than a percentage, and it is how the roster actually behaves.
+    brotherNonPayers: String(
       Math.max(
         0,
         Math.round(
-          (1 - settings.collection_rate) *
-            (settings.active_members + settings.pledges_expected)
+          (1 - (settings.brother_collection_rate ?? settings.collection_rate)) *
+            settings.active_members
+        )
+      )
+    ),
+    pledgeNonPayers: String(
+      Math.max(
+        0,
+        Math.round(
+          (1 - (settings.pledge_collection_rate ?? settings.collection_rate)) *
+            settings.pledges_expected
         )
       )
     ),
@@ -84,10 +98,22 @@ export default function Workbench({
       aid,
     };
     const activeCount = breakdown.fullCount + aid.length;
-    // Collection rate is driven by an estimated non-payer count: each expected
-    // non-payer is valued at the average dues, i.e. rate = 1 − N / billed.
-    const billed = activeCount + int(s.expected);
-    const nonPayers = Math.max(0, Math.min(billed, int(s.nonPayers)));
+    // Each tier collects at its own rate, driven by an estimated non-payer
+    // headcount: rate = 1 − N / billed for that tier. Brothers and new members
+    // behave very differently, and one blended rate hides which one is the
+    // problem. The blended figure below is an output, kept only so older
+    // readers (and the cash curve's legacy field) still work.
+    const pledgeBilled = int(s.expected);
+    const bNon = Math.max(0, Math.min(activeCount, int(s.brotherNonPayers)));
+    const pNon = Math.max(0, Math.min(pledgeBilled, int(s.pledgeNonPayers)));
+    const bRate = activeCount > 0 ? 1 - bNon / activeCount : 1;
+    const pRate = pledgeBilled > 0 ? 1 - pNon / pledgeBilled : 1;
+    const brotherGross =
+      breakdown.fullCount * breakdown.fullRate + aid.reduce((sum, a) => sum + a.amount, 0);
+    const pledgeGross = pledgeBilled * num(s.pledgeDues);
+    const grossAll = brotherGross + pledgeGross;
+    const blended =
+      grossAll > 0 ? (brotherGross * bRate + pledgeGross * pRate) / grossAll : 1;
     return {
       active_members: activeCount,
       current_pledges: settings.current_pledges,
@@ -97,7 +123,9 @@ export default function Workbench({
       active_dues: breakdown.fullRate,
       active_dues_breakdown: breakdown,
       pledge_dues: num(s.pledgeDues),
-      collection_rate: billed > 0 ? Math.max(0, 1 - nonPayers / billed) : 1,
+      collection_rate: blended,
+      brother_collection_rate: bRate,
+      pledge_collection_rate: pRate,
       starting_balance: num(s.startingBalance),
       dues_collected: settings.dues_collected,
       reserve_target: num(s.reserveTarget),
@@ -144,6 +172,8 @@ export default function Workbench({
           activeDues: live.active_dues_breakdown!.fullRate,
           pledgeDues: live.pledge_dues,
           collectionRate: live.collection_rate * 100,
+          brotherCollectionRate: (live.brother_collection_rate ?? 1) * 100,
+          pledgeCollectionRate: (live.pledge_collection_rate ?? 1) * 100,
           pledgesConservative: live.pledges_conservative,
           pledgesExpected: live.pledges_expected,
           pledgesOptimistic: live.pledges_optimistic,
@@ -172,8 +202,12 @@ export default function Workbench({
   const fullSubtotal = live.active_dues_breakdown!.fullCount * live.active_dues_breakdown!.fullRate;
   const pledgesSubtotal = live.pledges_expected * live.pledge_dues;
   const haircut = (fullSubtotal + aidSubtotal + pledgesSubtotal) * (1 - live.collection_rate);
-  const billedMembers = live.active_members + live.pledges_expected;
   const collectedPct = Math.round(live.collection_rate * 100);
+  const brotherPct = brotherCollectionRate(live) * 100;
+  const pledgePct = pledgeCollectionRate(live) * 100;
+  const breakEvenPct = forecast.breakEvenRate * 100;
+  // How far the tier mix sits below the rate that would balance the semester.
+  const gapPoints = breakEvenPct - forecast.blendedCollectionRate * 100;
 
   // ── The waterfall: in + income − bills = to work with − reserve = safe to
   //    spend − events = left (projected end balance). The reserve is carved out
@@ -291,23 +325,38 @@ export default function Workbench({
           <span className="text-muted-foreground">used for the outlook in step 4</span>
         </div>
 
-        {/* How many actually pay */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border border-border bg-muted/30 px-4 py-2.5">
-          <label className="flex items-center gap-2.5">
-            <span className="text-sm font-medium text-foreground">Expect won&apos;t pay</span>
-            <input
-              type="number" min={0} max={billedMembers}
-              value={s.nonPayers}
-              onChange={set("nonPayers")}
-              aria-label="Members expected not to pay"
-              className={`${inputCls} w-[4.5rem] text-center font-semibold`}
-            />
-            <span className="whitespace-nowrap text-sm text-muted-foreground">
-              of {billedMembers}
-            </span>
-          </label>
-          <p className="text-xs text-muted-foreground">
-            ≈ {collectedPct}% collected · most chapters land 90–97%
+        {/* How many actually pay — one rate per tier */}
+        <div className="mt-3 rounded-xl border border-border bg-muted/30 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+            <label className="flex items-center gap-2.5">
+              <span className="text-sm font-medium text-foreground">Brothers won&apos;t pay</span>
+              <input
+                type="number" min={0} max={live.active_members}
+                value={s.brotherNonPayers}
+                onChange={set("brotherNonPayers")}
+                aria-label="Brothers expected not to pay"
+                className={`${inputCls} w-[4.5rem] text-center font-semibold`}
+              />
+              <span className="whitespace-nowrap text-sm text-muted-foreground">
+                of {live.active_members} · {Math.round(brotherPct)}% collected
+              </span>
+            </label>
+            <label className="flex items-center gap-2.5">
+              <span className="text-sm font-medium text-foreground">New members won&apos;t pay</span>
+              <input
+                type="number" min={0} max={live.pledges_expected}
+                value={s.pledgeNonPayers}
+                onChange={set("pledgeNonPayers")}
+                aria-label="New members expected not to pay"
+                className={`${inputCls} w-[4.5rem] text-center font-semibold`}
+              />
+              <span className="whitespace-nowrap text-sm text-muted-foreground">
+                of {live.pledges_expected} · {Math.round(pledgePct)}% collected
+              </span>
+            </label>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Blends to {collectedPct}% · break-even is {Math.round(breakEvenPct)}%
             {haircut > 0 && (
               <>
                 {" · "}
@@ -315,6 +364,12 @@ export default function Workbench({
               </>
             )}
           </p>
+          {gapPoints > 0.05 && (
+            <p className="mt-1.5 text-xs font-medium text-destructive">
+              Collection is {gapPoints.toFixed(1)} points short of break-even — the plan
+              only works if more members pay than last semester.
+            </p>
+          )}
         </div>
 
         {/* When dues arrive — drives the cash-flow timeline on the dashboard */}
